@@ -51,14 +51,15 @@ export default function IsometricMap({
 }: IsometricMapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const activePointersRef = useRef(new Map<number, Point>());
-  const dragStateRef = useRef<{ x: number; y: number; viewBox: ViewBox } | null>(null);
+  const dragStateRef = useRef<{ x: number; y: number; rotation: number } | null>(null);
   const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(-28);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const searched = useMemo(() => new Set(searchedLocationIds), [searchedLocationIds]);
+  const center = useMemo(() => getLocationCenter(locations), [locations]);
   const project = (x: number, y: number, z = 0): Point => ({
-    x: (x - y) * scale * isoXScale,
-    y: (x + y) * scale * isoYScale - z * zScale
+    ...projectRotatedPoint(x, y, z, center, rotation)
   });
   const blocks = locations
     .map((location) => buildBlock(location, project, searched, selectedLocationId, hoveredLocationId))
@@ -141,7 +142,7 @@ export default function IsometricMap({
     dragStateRef.current = {
       x: event.clientX,
       y: event.clientY,
-      viewBox
+      rotation
     };
   }
 
@@ -172,20 +173,14 @@ export default function IsometricMap({
       return;
     }
 
-    const bounds = svg.getBoundingClientRect();
-    const dx = ((event.clientX - drag.x) / Math.max(bounds.width, 1)) * drag.viewBox.width;
-    const dy = ((event.clientY - drag.y) / Math.max(bounds.height, 1)) * drag.viewBox.height;
-    const nextViewBox = applyViewTransform(baseViewBox, zoom, offset);
+    const dx = event.clientX - drag.x;
 
-    setOffset((current) => ({
-      x: current.x - dx,
-      y: current.y - dy
-    }));
+    setRotation(normalizeAngle(drag.rotation + dx * 0.35));
     dragStateRef.current = {
       ...drag,
       x: event.clientX,
       y: event.clientY,
-      viewBox: nextViewBox
+      rotation: normalizeAngle(drag.rotation + dx * 0.35)
     };
   }
 
@@ -204,7 +199,7 @@ export default function IsometricMap({
       dragStateRef.current = {
         x: remaining.x,
         y: remaining.y,
-        viewBox
+        rotation
       };
       return;
     }
@@ -333,6 +328,30 @@ function pointsToString(points: Point[]) {
   return points.map((point) => `${point.x},${point.y}`).join(' ');
 }
 
+function getLocationCenter(locations: Location[]): Point {
+  if (locations.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: (Math.min(...locations.map((location) => location.xMin)) + Math.max(...locations.map((location) => location.xMax))) / 2,
+    y: (Math.min(...locations.map((location) => location.yMin)) + Math.max(...locations.map((location) => location.yMax))) / 2
+  };
+}
+
+function projectRotatedPoint(x: number, y: number, z: number, center: Point, rotation: number): Point {
+  const radians = (rotation * Math.PI) / 180;
+  const localX = x - center.x;
+  const localY = y - center.y;
+  const rotatedX = localX * Math.cos(radians) - localY * Math.sin(radians) + center.x;
+  const rotatedY = localX * Math.sin(radians) + localY * Math.cos(radians) + center.y;
+
+  return {
+    x: (rotatedX - rotatedY) * scale * isoXScale,
+    y: (rotatedX + rotatedY) * scale * isoYScale - z * zScale
+  };
+}
+
 function distanceBetween(first: Point, second: Point) {
   return Math.hypot(first.x - second.x, first.y - second.y);
 }
@@ -349,4 +368,15 @@ function shadeColor(color: string, percent: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeAngle(value: number) {
+  if (value > 180) {
+    return value - 360;
+  }
+  if (value < -180) {
+    return value + 360;
+  }
+
+  return value;
 }
