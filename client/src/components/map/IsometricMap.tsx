@@ -1,3 +1,4 @@
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from 'react';
 import type { Location, LocationType } from '../../types/location';
 
 interface IsometricMapProps {
@@ -36,7 +37,9 @@ const typeColors: Record<LocationType, string> = {
 const scale = 18;
 const isoXScale = 0.96;
 const isoYScale = 0.48;
-const zScale = 8;
+const zScale = 12;
+const minZoom = 0.7;
+const maxZoom = 3.2;
 
 export default function IsometricMap({
   locations,
@@ -46,7 +49,13 @@ export default function IsometricMap({
   onHoverLocation,
   onSelectLocation
 }: IsometricMapProps) {
-  const searched = new Set(searchedLocationIds);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const activePointersRef = useRef(new Map<number, Point>());
+  const dragStateRef = useRef<{ x: number; y: number; viewBox: ViewBox } | null>(null);
+  const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const searched = useMemo(() => new Set(searchedLocationIds), [searchedLocationIds]);
   const project = (x: number, y: number, z = 0): Point => ({
     x: (x - y) * scale * isoXScale,
     y: (x + y) * scale * isoYScale - z * zScale
@@ -54,16 +63,29 @@ export default function IsometricMap({
   const blocks = locations
     .map((location) => buildBlock(location, project, searched, selectedLocationId, hoveredLocationId))
     .sort((left, right) => left.depth - right.depth);
-  const viewBox = buildViewBox(blocks.flatMap((block) => block.points));
+  const baseViewBox = buildViewBox(blocks.flatMap((block) => block.points));
+  const viewBox = applyViewTransform(baseViewBox, zoom, offset);
   const floor = buildFloor(locations, project);
 
   return (
     <svg
       aria-label="Warehouse 3D map"
       className="isometric-map"
+      onPointerCancel={handlePointerEnd}
+      onPointerDown={handlePointerDown}
+      onPointerLeave={handlePointerEnd}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onWheel={handleWheel}
+      ref={svgRef}
       role="img"
       viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
     >
+      <defs>
+        <filter id="iso-shadow" x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="8" floodColor="#111827" floodOpacity="0.25" stdDeviation="5" />
+        </filter>
+      </defs>
       <rect className="isometric-bg" x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} />
       {floor && <polygon className="isometric-floor" points={pointsToString(floor)} />}
       {blocks.map((block) => (
@@ -87,6 +109,115 @@ export default function IsometricMap({
       ))}
     </svg>
   );
+
+  function handleWheel(event: WheelEvent<SVGSVGElement>) {
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    const nextZoom = clamp(zoom * (direction > 0 ? 1.12 : 0.88), minZoom, maxZoom);
+    setZoom(nextZoom);
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    const svg = svgRef.current;
+
+    if (!svg) {
+      return;
+    }
+
+    event.preventDefault();
+    svg.setPointerCapture(event.pointerId);
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointersRef.current.size >= 2) {
+      const [first, second] = [...activePointersRef.current.values()];
+      pinchStateRef.current = {
+        distance: distanceBetween(first, second),
+        zoom
+      };
+      dragStateRef.current = null;
+      return;
+    }
+
+    dragStateRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      viewBox
+    };
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    const svg = svgRef.current;
+
+    if (!svg || !activePointersRef.current.has(event.pointerId)) {
+      return;
+    }
+
+    event.preventDefault();
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointersRef.current.size >= 2) {
+      const [first, second] = [...activePointersRef.current.values()];
+      const pinch = pinchStateRef.current;
+
+      if (pinch) {
+        setZoom(clamp(pinch.zoom * (distanceBetween(first, second) / Math.max(pinch.distance, 1)), minZoom, maxZoom));
+      }
+
+      return;
+    }
+
+    const drag = dragStateRef.current;
+
+    if (!drag) {
+      return;
+    }
+
+    const bounds = svg.getBoundingClientRect();
+    const dx = ((event.clientX - drag.x) / Math.max(bounds.width, 1)) * drag.viewBox.width;
+    const dy = ((event.clientY - drag.y) / Math.max(bounds.height, 1)) * drag.viewBox.height;
+    const nextViewBox = applyViewTransform(baseViewBox, zoom, offset);
+
+    setOffset((current) => ({
+      x: current.x - dx,
+      y: current.y - dy
+    }));
+    dragStateRef.current = {
+      ...drag,
+      x: event.clientX,
+      y: event.clientY,
+      viewBox: nextViewBox
+    };
+  }
+
+  function handlePointerEnd(event: ReactPointerEvent<SVGSVGElement>) {
+    const svg = svgRef.current;
+
+    if (svg?.hasPointerCapture(event.pointerId)) {
+      svg.releasePointerCapture(event.pointerId);
+    }
+
+    activePointersRef.current.delete(event.pointerId);
+    pinchStateRef.current = null;
+
+    if (activePointersRef.current.size === 1) {
+      const [remaining] = activePointersRef.current.values();
+      dragStateRef.current = {
+        x: remaining.x,
+        y: remaining.y,
+        viewBox
+      };
+      return;
+    }
+
+    dragStateRef.current = null;
+  }
+}
+
+interface ViewBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 function buildBlock(
@@ -167,7 +298,7 @@ function buildFloor(locations: Location[], project: (x: number, y: number, z?: n
   return [project(minX, minY, 0), project(maxX, minY, 0), project(maxX, maxY, 0), project(minX, maxY, 0)];
 }
 
-function buildViewBox(points: Point[]) {
+function buildViewBox(points: Point[]): ViewBox {
   if (points.length === 0) {
     return { x: -400, y: -220, width: 800, height: 520 };
   }
@@ -186,8 +317,24 @@ function buildViewBox(points: Point[]) {
   };
 }
 
+function applyViewTransform(viewBox: ViewBox, zoom: number, offset: Point): ViewBox {
+  const nextWidth = viewBox.width / zoom;
+  const nextHeight = viewBox.height / zoom;
+
+  return {
+    x: viewBox.x + (viewBox.width - nextWidth) / 2 + offset.x,
+    y: viewBox.y + (viewBox.height - nextHeight) / 2 + offset.y,
+    width: nextWidth,
+    height: nextHeight
+  };
+}
+
 function pointsToString(points: Point[]) {
   return points.map((point) => `${point.x},${point.y}`).join(' ');
+}
+
+function distanceBetween(first: Point, second: Point) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
 }
 
 function shadeColor(color: string, percent: number) {
@@ -198,4 +345,8 @@ function shadeColor(color: string, percent: number) {
   const shift = (channel: number) => Math.min(255, Math.max(0, Math.round(channel + (channel * percent) / 100)));
 
   return `rgb(${shift(red)}, ${shift(green)}, ${shift(blue)})`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

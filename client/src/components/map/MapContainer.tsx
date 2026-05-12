@@ -28,7 +28,7 @@ export default function MapContainer({
         onHoverLocation={onHoverLocation}
         onSelectLocation={onSelectLocation}
       />
-      <p className="map-hint">Pinch to zoom and drag to move</p>
+      <p className="map-hint">Pinch or scroll to zoom and drag to move</p>
     </section>
   );
 }
