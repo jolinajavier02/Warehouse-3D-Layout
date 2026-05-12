@@ -74,10 +74,18 @@ export default function IsometricMap({
   const project = (x: number, y: number, z = 0): Point => ({
     ...projectRotatedPoint(x, y, z, center, rotation)
   });
-  const blocks = locations
+  const shopLocations = locations.filter((location) => location.type === 'Shop');
+  const wayLocations = locations.filter((location) => location.type === 'Path');
+  const laneGuides = wayLocations.map((location) => buildLaneGuide(location, project));
+  const intersections = buildIntersections(wayLocations, project);
+  const blocks = shopLocations
     .map((location) => buildBlock(location, project, searched, selectedLocationId, hoveredLocationId))
     .sort((left, right) => left.depth - right.depth);
-  const baseViewBox = buildViewBox(blocks.flatMap((block) => block.points));
+  const baseViewBox = buildViewBox([
+    ...blocks.flatMap((block) => block.points),
+    ...laneGuides.flatMap((lane) => lane.points),
+    ...intersections.map((intersection) => intersection.point)
+  ]);
   const viewBox = applyViewTransform(baseViewBox, zoom, offset);
   const floor = buildFloor(locations, project);
 
@@ -102,6 +110,23 @@ export default function IsometricMap({
       </defs>
       <rect className="isometric-bg" x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} />
       {floor && <polygon className="isometric-floor" points={pointsToString(floor)} />}
+      {laneGuides.map((lane) => (
+        <g className="iso-lane" key={lane.location.id}>
+          <polygon points={pointsToString(lane.points)} />
+          <polyline points={pointsToString(lane.centerLine)} />
+          <text x={lane.labelPoint.x} y={lane.labelPoint.y}>
+            {lane.label}
+          </text>
+        </g>
+      ))}
+      {intersections.map((intersection) => (
+        <g className="iso-intersection" key={intersection.id}>
+          <circle cx={intersection.point.x} cy={intersection.point.y} r="13" />
+          <text x={intersection.point.x} y={intersection.point.y + 3}>
+            +
+          </text>
+        </g>
+      ))}
       {blocks.map((block) => (
         <g
           className={`iso-block ${block.isHovered ? 'hovered' : ''} ${block.isSelected ? 'selected' : ''} ${
@@ -358,6 +383,56 @@ function buildFloor(locations: Location[], project: (x: number, y: number, z?: n
   const maxY = Math.max(...locations.map((location) => location.yMax)) + 2;
 
   return [project(minX, minY, 0), project(maxX, minY, 0), project(maxX, maxY, 0), project(minX, maxY, 0)];
+}
+
+function buildLaneGuide(location: Location, project: (x: number, y: number, z?: number) => Point) {
+  const laneZ = 0.06;
+  const points = [
+    project(location.xMin, location.yMin, laneZ),
+    project(location.xMax, location.yMin, laneZ),
+    project(location.xMax, location.yMax, laneZ),
+    project(location.xMin, location.yMax, laneZ)
+  ];
+  const isVertical = location.yMax - location.yMin >= location.xMax - location.xMin;
+  const midX = (location.xMin + location.xMax) / 2;
+  const midY = (location.yMin + location.yMax) / 2;
+  const centerLine = isVertical
+    ? [project(midX, location.yMin + 1, laneZ + 0.02), project(midX, location.yMax - 1, laneZ + 0.02)]
+    : [project(location.xMin + 1, midY, laneZ + 0.02), project(location.xMax - 1, midY, laneZ + 0.02)];
+
+  return {
+    location,
+    points,
+    centerLine,
+    label: isVertical ? 'North/South Way' : 'East/West Way',
+    labelPoint: project(midX, midY, laneZ + 0.18)
+  };
+}
+
+function buildIntersections(locations: Location[], project: (x: number, y: number, z?: number) => Point) {
+  const intersections: Array<{ id: string; point: Point }> = [];
+
+  for (let leftIndex = 0; leftIndex < locations.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < locations.length; rightIndex += 1) {
+      const left = locations[leftIndex];
+      const right = locations[rightIndex];
+      const xMin = Math.max(left.xMin, right.xMin);
+      const yMin = Math.max(left.yMin, right.yMin);
+      const xMax = Math.min(left.xMax, right.xMax);
+      const yMax = Math.min(left.yMax, right.yMax);
+
+      if (xMin >= xMax || yMin >= yMax) {
+        continue;
+      }
+
+      intersections.push({
+        id: `${left.id}-${right.id}`,
+        point: project((xMin + xMax) / 2, (yMin + yMax) / 2, 0.32)
+      });
+    }
+  }
+
+  return intersections;
 }
 
 function buildViewBox(points: Point[]): ViewBox {
