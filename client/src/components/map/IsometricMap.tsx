@@ -49,10 +49,11 @@ const shopAccentColors = [
 
 const scale = 18;
 const isoXScale = 0.96;
-const isoYScale = 0.48;
 const zScale = 12;
 const minZoom = 0.7;
 const maxZoom = 3.2;
+const minPitch = 0.32;
+const maxPitch = 0.82;
 
 export default function IsometricMap({
   locations,
@@ -68,23 +69,26 @@ export default function IsometricMap({
   const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(-28);
+  const [pitch, setPitch] = useState(0.54);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const searched = useMemo(() => new Set(searchedLocationIds), [searchedLocationIds]);
   const center = useMemo(() => getLocationCenter(locations), [locations]);
   const project = (x: number, y: number, z = 0): Point => ({
-    ...projectRotatedPoint(x, y, z, center, rotation)
+    ...projectRotatedPoint(x, y, z, center, rotation, pitch)
   });
   const shopLocations = locations.filter((location) => location.type === 'Shop');
   const wayLocations = locations.filter((location) => location.type === 'Path');
   const laneGuides = wayLocations.map((location) => buildLaneGuide(location, project));
   const intersections = buildIntersections(wayLocations, project);
+  const amenities = buildAmenityMarkers(locations, project);
   const blocks = shopLocations
     .map((location) => buildBlock(location, project, searched, selectedLocationId, hoveredLocationId))
     .sort((left, right) => left.depth - right.depth);
   const baseViewBox = buildViewBox([
     ...blocks.flatMap((block) => block.points),
     ...laneGuides.flatMap((lane) => lane.points),
-    ...intersections.map((intersection) => intersection.point)
+    ...intersections.map((intersection) => intersection.point),
+    ...amenities.map((amenity) => amenity.point)
   ]);
   const viewBox = applyViewTransform(baseViewBox, zoom, offset);
   const floor = buildFloor(locations, project);
@@ -107,6 +111,9 @@ export default function IsometricMap({
         <filter id="iso-shadow" x="-20%" y="-20%" width="140%" height="150%">
           <feDropShadow dx="0" dy="8" floodColor="#111827" floodOpacity="0.25" stdDeviation="5" />
         </filter>
+        <marker id="lane-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#f8fafc" />
+        </marker>
       </defs>
       <rect className="isometric-bg" x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} />
       {floor && <polygon className="isometric-floor" points={pointsToString(floor)} />}
@@ -124,6 +131,14 @@ export default function IsometricMap({
           <circle cx={intersection.point.x} cy={intersection.point.y} r="13" />
           <text x={intersection.point.x} y={intersection.point.y + 3}>
             +
+          </text>
+        </g>
+      ))}
+      {amenities.map((amenity) => (
+        <g className={`iso-amenity iso-amenity-${amenity.kind}`} key={amenity.id}>
+          <rect height="28" rx="5" width="38" x={amenity.point.x - 19} y={amenity.point.y - 28} />
+          <text x={amenity.point.x} y={amenity.point.y - 10}>
+            {amenity.label}
           </text>
         </g>
       ))}
@@ -154,17 +169,26 @@ export default function IsometricMap({
           {block.showDetail && (
             <g className="iso-detail">
               <rect
-                height="44"
+                height="102"
                 rx="6"
                 width={block.detailWidth}
                 x={block.detailPoint.x - block.detailWidth / 2}
-                y={block.detailPoint.y - 52}
+                y={block.detailPoint.y - 110}
               />
-              <text x={block.detailPoint.x} y={block.detailPoint.y - 34}>
+              <text x={block.detailPoint.x} y={block.detailPoint.y - 88}>
                 {block.location.name}
               </text>
-              <text className="iso-detail-meta" x={block.detailPoint.x} y={block.detailPoint.y - 18}>
-                {block.location.type} · X {block.location.xMin}-{block.location.xMax} · Y {block.location.yMin}-{block.location.yMax}
+              <text className="iso-detail-meta" x={block.detailPoint.x} y={block.detailPoint.y - 68}>
+                Type: {block.location.type}
+              </text>
+              <text className="iso-detail-meta" x={block.detailPoint.x} y={block.detailPoint.y - 52}>
+                Area: {block.area.toFixed(0)} sq units · Height: {block.height.toFixed(1)}
+              </text>
+              <text className="iso-detail-meta" x={block.detailPoint.x} y={block.detailPoint.y - 36}>
+                X {block.location.xMin}-{block.location.xMax} · Y {block.location.yMin}-{block.location.yMax}
+              </text>
+              <text className="iso-detail-meta" x={block.detailPoint.x} y={block.detailPoint.y - 20}>
+                {block.location.description ?? 'No description available.'}
               </text>
             </g>
           )}
@@ -236,8 +260,10 @@ export default function IsometricMap({
     }
 
     const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
 
     setRotation(normalizeAngle(drag.rotation + dx * 0.35));
+    setPitch((current) => clamp(current - dy * 0.0025, minPitch, maxPitch));
     dragStateRef.current = {
       ...drag,
       x: event.clientX,
@@ -307,7 +333,9 @@ function buildBlock(
   const borderColor = borderColorFor(location, searched, selectedLocationId, hoveredLocationId);
   const labelPoint = project((location.xMin + location.xMax) / 2, (location.yMin + location.yMax) / 2, zTop + 0.45);
   const detailPoint = project((location.xMin + location.xMax) / 2, (location.yMin + location.yMax) / 2, zTop + 2.3);
-  const detailWidth = Math.max(170, Math.min(280, location.name.length * 8 + 96));
+  const detailWidth = Math.max(250, Math.min(380, location.name.length * 8 + 190));
+  const area = Math.abs(location.xMax - location.xMin) * Math.abs(location.yMax - location.yMin);
+  const height = Math.abs(location.zMax - location.zMin);
 
   return {
     location,
@@ -322,6 +350,8 @@ function buildBlock(
     borderColor,
     detailPoint,
     detailWidth,
+    area,
+    height,
     depth: location.xMax + location.yMax + zTop,
     isHovered: location.id === hoveredLocationId,
     isSelected: location.id === selectedLocationId,
@@ -338,13 +368,13 @@ function colorFor(
   hoveredLocationId: string | null
 ) {
   if (location.id === selectedLocationId) {
-    return '#f97316';
+    return '#ef4444';
   }
   if (location.id === hoveredLocationId) {
-    return '#60a5fa';
+    return '#ef4444';
   }
   if (searched.has(location.id)) {
-    return '#facc15';
+    return '#ef4444';
   }
 
   return typeColors[location.type] ?? '#d6dadd';
@@ -357,13 +387,13 @@ function borderColorFor(
   hoveredLocationId: string | null
 ) {
   if (location.id === selectedLocationId) {
-    return '#7c2d12';
+    return '#991b1b';
   }
   if (location.id === hoveredLocationId) {
-    return '#1d4ed8';
+    return '#991b1b';
   }
   if (searched.has(location.id)) {
-    return '#854d0e';
+    return '#991b1b';
   }
   if (location.type === 'Shop') {
     return shopAccentColors[shopIndex(location.id) % shopAccentColors.length];
@@ -435,6 +465,53 @@ function buildIntersections(locations: Location[], project: (x: number, y: numbe
   return intersections;
 }
 
+function buildAmenityMarkers(locations: Location[], project: (x: number, y: number, z?: number) => Point) {
+  const boundary = locations.find((location) => location.type === 'Boundary');
+  const verticalPath = locations.find((location) => location.id.includes('vert')) ?? locations.find((location) => location.type === 'Path');
+  const horizontalPath =
+    locations.find((location) => location.id.includes('horiz')) ?? locations.filter((location) => location.type === 'Path')[1];
+
+  if (!boundary || !verticalPath || !horizontalPath) {
+    return [];
+  }
+
+  const midX = (verticalPath.xMin + verticalPath.xMax) / 2;
+  const midY = (horizontalPath.yMin + horizontalPath.yMax) / 2;
+
+  return [
+    {
+      id: 'amenity-exit-north',
+      kind: 'exit',
+      label: 'EXIT',
+      point: project(midX, boundary.yMax - 1.5, 1.8)
+    },
+    {
+      id: 'amenity-exit-south',
+      kind: 'exit',
+      label: 'EXIT',
+      point: project(midX, boundary.yMin + 1.5, 1.8)
+    },
+    {
+      id: 'amenity-cr',
+      kind: 'cr',
+      label: 'CR',
+      point: project(midX + 5.5, midY + 4, 1.8)
+    },
+    {
+      id: 'amenity-way-left',
+      kind: 'way',
+      label: 'WAY',
+      point: project(boundary.xMin + 8, midY, 1.8)
+    },
+    {
+      id: 'amenity-way-right',
+      kind: 'way',
+      label: 'WAY',
+      point: project(boundary.xMax - 8, midY, 1.8)
+    }
+  ];
+}
+
 function buildViewBox(points: Point[]): ViewBox {
   if (points.length === 0) {
     return { x: -400, y: -220, width: 800, height: 520 };
@@ -486,7 +563,7 @@ function getLocationCenter(locations: Location[]): Point {
   };
 }
 
-function projectRotatedPoint(x: number, y: number, z: number, center: Point, rotation: number): Point {
+function projectRotatedPoint(x: number, y: number, z: number, center: Point, rotation: number, pitch: number): Point {
   const radians = (rotation * Math.PI) / 180;
   const localX = x - center.x;
   const localY = y - center.y;
@@ -495,7 +572,7 @@ function projectRotatedPoint(x: number, y: number, z: number, center: Point, rot
 
   return {
     x: (rotatedX - rotatedY) * scale * isoXScale,
-    y: (rotatedX + rotatedY) * scale * isoYScale - z * zScale
+    y: (rotatedX + rotatedY) * scale * pitch - z * zScale
   };
 }
 

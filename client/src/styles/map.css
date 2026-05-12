@@ -59,6 +59,7 @@
   stroke: #f8fafc;
   stroke-dasharray: 8 8;
   stroke-linecap: round;
+  marker-end: url("#lane-arrow");
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
 }
@@ -126,7 +127,7 @@
 }
 
 .iso-block.selected .iso-block-border {
-  stroke: #f97316;
+  stroke: #ef4444;
   stroke-width: 6;
 }
 
@@ -136,7 +137,7 @@
 }
 
 .iso-block.searched .iso-block-border {
-  stroke: #facc15;
+  stroke: #ef4444;
   stroke-width: 5;
 }
 
@@ -158,8 +159,8 @@
 
 .iso-detail rect {
   fill: rgba(255, 255, 255, 0.95);
-  stroke: rgba(15, 23, 42, 0.2);
-  stroke-width: 1;
+  stroke: #ef4444;
+  stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
 
@@ -176,8 +177,38 @@
 
 .iso-detail .iso-detail-meta {
   fill: #475569;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
+}
+
+.iso-amenity {
+  pointer-events: none;
+}
+
+.iso-amenity rect {
+  fill: #1d4ed8;
+  stroke: #ffffff;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.iso-amenity text {
+  fill: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.iso-amenity-exit rect {
+  fill: #2563eb;
+}
+
+.iso-amenity-cr rect {
+  fill: #1d4ed8;
+}
+
+.iso-amenity-way rect {
+  fill: #0f766e;
 }
 
 .map-hint {
