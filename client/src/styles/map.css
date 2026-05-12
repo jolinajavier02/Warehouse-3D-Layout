@@ -54,6 +54,13 @@
   vector-effect: non-scaling-stroke;
 }
 
+.iso-block-border {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
 .iso-block-outline {
   fill: none;
   stroke: rgba(255, 255, 255, 0.85);
@@ -61,14 +68,28 @@
   vector-effect: non-scaling-stroke;
 }
 
+.iso-block.hovered polygon {
+  stroke-width: 2.6;
+}
+
 .iso-block.selected polygon {
   stroke: #7c2d12;
-  stroke-width: 2.8;
+  stroke-width: 3.4;
+}
+
+.iso-block.selected .iso-block-border {
+  stroke: #f97316;
+  stroke-width: 6;
 }
 
 .iso-block.searched polygon {
   stroke: #854d0e;
-  stroke-width: 2.2;
+  stroke-width: 2.8;
+}
+
+.iso-block.searched .iso-block-border {
+  stroke: #facc15;
+  stroke-width: 5;
 }
 
 .iso-label {
@@ -81,6 +102,34 @@
   stroke-width: 3px;
   text-anchor: middle;
   vector-effect: non-scaling-stroke;
+}
+
+.iso-detail {
+  pointer-events: none;
+}
+
+.iso-detail rect {
+  fill: rgba(255, 255, 255, 0.95);
+  stroke: rgba(15, 23, 42, 0.2);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.iso-detail text {
+  fill: #111827;
+  font-size: 14px;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.98);
+  stroke-width: 3px;
+  text-anchor: middle;
+  vector-effect: non-scaling-stroke;
+}
+
+.iso-detail .iso-detail-meta {
+  fill: #475569;
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .map-hint {

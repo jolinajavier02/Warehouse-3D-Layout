@@ -34,6 +34,19 @@ const typeColors: Record<LocationType, string> = {
   Office: '#ef4444'
 };
 
+const shopAccentColors = [
+  '#b91c1c',
+  '#7c3aed',
+  '#db2777',
+  '#ea580c',
+  '#0891b2',
+  '#2563eb',
+  '#16a34a',
+  '#ca8a04',
+  '#dc2626',
+  '#4f46e5'
+];
+
 const scale = 18;
 const isoXScale = 0.96;
 const isoYScale = 0.48;
@@ -91,20 +104,44 @@ export default function IsometricMap({
       {floor && <polygon className="isometric-floor" points={pointsToString(floor)} />}
       {blocks.map((block) => (
         <g
-          className={`iso-block ${block.isSelected ? 'selected' : ''} ${block.isSearched ? 'searched' : ''}`}
+          className={`iso-block ${block.isHovered ? 'hovered' : ''} ${block.isSelected ? 'selected' : ''} ${
+            block.isSearched ? 'searched' : ''
+          }`}
           key={block.location.id}
           onClick={() => onSelectLocation(block.location.id)}
           onMouseEnter={() => onHoverLocation(block.location.id)}
           onMouseLeave={() => onHoverLocation(null)}
         >
-          <polygon fill={block.rightColor} points={pointsToString(block.rightFace)} />
-          <polygon fill={block.frontColor} points={pointsToString(block.frontFace)} />
-          <polygon fill={block.topColor} points={pointsToString(block.topFace)} />
+          <polygon fill={block.rightColor} points={pointsToString(block.rightFace)} style={{ stroke: block.borderColor }} />
+          <polygon fill={block.frontColor} points={pointsToString(block.frontFace)} style={{ stroke: block.borderColor }} />
+          <polygon fill={block.topColor} points={pointsToString(block.topFace)} style={{ stroke: block.borderColor }} />
+          <polyline
+            className="iso-block-border"
+            points={pointsToString([...block.topFace, block.topFace[0]])}
+            style={{ stroke: block.borderColor }}
+          />
           <polyline className="iso-block-outline" points={pointsToString([...block.topFace, block.topFace[0]])} />
           {block.showLabel && (
             <text className="iso-label" x={block.labelPoint.x} y={block.labelPoint.y}>
               {block.location.name}
             </text>
+          )}
+          {block.showDetail && (
+            <g className="iso-detail">
+              <rect
+                height="44"
+                rx="6"
+                width={block.detailWidth}
+                x={block.detailPoint.x - block.detailWidth / 2}
+                y={block.detailPoint.y - 52}
+              />
+              <text x={block.detailPoint.x} y={block.detailPoint.y - 34}>
+                {block.location.name}
+              </text>
+              <text className="iso-detail-meta" x={block.detailPoint.x} y={block.detailPoint.y - 18}>
+                {block.location.type} · X {block.location.xMin}-{block.location.xMax} · Y {block.location.yMin}-{block.location.yMax}
+              </text>
+            </g>
           )}
         </g>
       ))}
@@ -242,7 +279,10 @@ function buildBlock(
     project(location.xMax, location.yMin, zTop)
   ];
   const baseColor = colorFor(location, searched, selectedLocationId, hoveredLocationId);
+  const borderColor = borderColorFor(location, searched, selectedLocationId, hoveredLocationId);
   const labelPoint = project((location.xMin + location.xMax) / 2, (location.yMin + location.yMax) / 2, zTop + 0.45);
+  const detailPoint = project((location.xMin + location.xMax) / 2, (location.yMin + location.yMax) / 2, zTop + 2.3);
+  const detailWidth = Math.max(170, Math.min(280, location.name.length * 8 + 96));
 
   return {
     location,
@@ -254,9 +294,14 @@ function buildBlock(
     topColor: baseColor,
     frontColor: shadeColor(baseColor, -18),
     rightColor: shadeColor(baseColor, -28),
+    borderColor,
+    detailPoint,
+    detailWidth,
     depth: location.xMax + location.yMax + zTop,
+    isHovered: location.id === hoveredLocationId,
     isSelected: location.id === selectedLocationId,
     isSearched: searched.has(location.id),
+    showDetail: location.type === 'Shop' && (location.id === hoveredLocationId || location.id === selectedLocationId),
     showLabel: location.type !== 'Boundary' && location.type !== 'Path'
   };
 }
@@ -278,6 +323,28 @@ function colorFor(
   }
 
   return typeColors[location.type] ?? '#d6dadd';
+}
+
+function borderColorFor(
+  location: Location,
+  searched: Set<string>,
+  selectedLocationId: string | null,
+  hoveredLocationId: string | null
+) {
+  if (location.id === selectedLocationId) {
+    return '#7c2d12';
+  }
+  if (location.id === hoveredLocationId) {
+    return '#1d4ed8';
+  }
+  if (searched.has(location.id)) {
+    return '#854d0e';
+  }
+  if (location.type === 'Shop') {
+    return shopAccentColors[shopIndex(location.id) % shopAccentColors.length];
+  }
+
+  return '#17202a';
 }
 
 function buildFloor(locations: Location[], project: (x: number, y: number, z?: number) => Point) {
@@ -326,6 +393,11 @@ function applyViewTransform(viewBox: ViewBox, zoom: number, offset: Point): View
 
 function pointsToString(points: Point[]) {
   return points.map((point) => `${point.x},${point.y}`).join(' ');
+}
+
+function shopIndex(id: string) {
+  const numericSuffix = Number.parseInt(id.replace(/\D+/g, ''), 10);
+  return Number.isFinite(numericSuffix) ? Math.max(numericSuffix - 1, 0) : 0;
 }
 
 function getLocationCenter(locations: Location[]): Point {
