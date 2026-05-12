@@ -34,6 +34,8 @@ export default function ThreeMapCanvas({
       return;
     }
 
+    const hostElement = host;
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#eef2f5');
     sceneRef.current = scene;
@@ -41,7 +43,7 @@ export default function ThreeMapCanvas({
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    host.appendChild(renderer.domElement);
+    hostElement.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.set(48, 52, 72);
@@ -70,14 +72,14 @@ export default function ThreeMapCanvas({
     scene.add(floor);
 
     function resize() {
-      const { width, height } = host.getBoundingClientRect();
+      const { width, height } = hostElement.getBoundingClientRect();
       renderer.setSize(width, height, false);
       camera.aspect = width / Math.max(height, 1);
       camera.updateProjectionMatrix();
     }
 
     const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(host);
+    resizeObserver.observe(hostElement);
     resize();
 
     let animationFrame = 0;
@@ -115,7 +117,7 @@ export default function ThreeMapCanvas({
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       controls.dispose();
       renderer.dispose();
-      host.removeChild(renderer.domElement);
+      hostElement.removeChild(renderer.domElement);
     };
   }, [onHoverLocation, onSelectLocation]);
 
