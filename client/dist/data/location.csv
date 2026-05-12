@@ -1,0 +1,8 @@
+id,type,name,xMin,yMin,xMax,yMax,zMin,zMax,description
+boundary_1,Boundary,Main Boundary,0,0,40,40,0,4,"Overall warehouse area"
+shop_1,Shop,Shop 1 (NW),0,20,18,40,0,4,"North-west unit inside boundary"
+shop_2,Shop,Shop 2 (NE),22,20,40,40,0,4,"North-east unit inside boundary"
+shop_3,Shop,Shop 3 (SW),0,0,18,18,0,4,"South-west unit inside boundary"
+shop_4,Shop,Shop 4 (SE),22,0,40,18,0,4,"South-east unit inside boundary"
+path_vert,Path,Vertical Corridor,18,0,22,40,0,4,"Vertical path through center"
+path_horiz,Path,Horizontal Corridor,0,18,40,22,0,4,"Horizontal path through center"

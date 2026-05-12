@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchLocations } from '../services/api';
+import { fetchCsvLocations } from '../services/csvLocations';
 import { fetchWorkbookLocations } from '../services/workbookLocations';
 import type { Location } from '../types/location';
 
@@ -24,9 +25,13 @@ export function useLocations(): UseLocationsResult {
         let nextLocations: Location[];
 
         try {
-          nextLocations = await fetchWorkbookLocations();
+          nextLocations = await fetchCsvLocations();
         } catch {
-          nextLocations = await fetchLocations();
+          try {
+            nextLocations = await fetchWorkbookLocations();
+          } catch {
+            nextLocations = await fetchLocations();
+          }
         }
 
         if (!ignore) {

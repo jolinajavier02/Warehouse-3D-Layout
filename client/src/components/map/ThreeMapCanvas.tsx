@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Location } from '../../types/location';
 import { applyHighlights } from './HighlightLayer';
+import IsometricMap from './IsometricMap';
 import { buildLocationGroup, type LocationMesh } from './MapObjects';
 import { getIntersectedLocationId } from './RaycasterHelper';
 
@@ -51,7 +52,7 @@ export default function ThreeMapCanvas({
       renderer = new THREE.WebGLRenderer({ antialias: true });
       setCanvasError(null);
     } catch {
-      setCanvasError('3D rendering is not available in this browser.');
+      setCanvasError('webgl-unavailable');
       return;
     }
 
@@ -219,7 +220,16 @@ export default function ThreeMapCanvas({
 
   return (
     <div className="three-map-canvas" ref={hostRef}>
-      {canvasError && <div className="map-render-error">{canvasError}</div>}
+      {canvasError && (
+        <IsometricMap
+          locations={locations}
+          hoveredLocationId={hoveredLocationId}
+          selectedLocationId={selectedLocationId}
+          searchedLocationIds={searchedLocationIds}
+          onHoverLocation={onHoverLocation}
+          onSelectLocation={onSelectLocation}
+        />
+      )}
     </div>
   );
 }
