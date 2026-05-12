@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Location } from '../../types/location';
@@ -27,6 +27,7 @@ export default function ThreeMapCanvas({
   const controlsRef = useRef<OrbitControls | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const meshesRef = useRef<LocationMesh[]>([]);
+  const [canvasError, setCanvasError] = useState<string | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -42,7 +43,16 @@ export default function ThreeMapCanvas({
     scene.fog = new THREE.Fog('#eef2f5', 90, 180);
     sceneRef.current = scene;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    let renderer: THREE.WebGLRenderer;
+
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      setCanvasError(null);
+    } catch {
+      setCanvasError('3D rendering is not available in this browser.');
+      return;
+    }
+
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -136,10 +146,14 @@ export default function ThreeMapCanvas({
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       controls.dispose();
       renderer.dispose();
-      hostElement.removeChild(renderer.domElement);
+      if (renderer.domElement.parentElement === hostElement) {
+        hostElement.removeChild(renderer.domElement);
+      }
       controlsRef.current = null;
       sceneRef.current = null;
       cameraRef.current = null;
+      groupRef.current = null;
+      meshesRef.current = [];
     };
   }, [onHoverLocation, onSelectLocation]);
 
@@ -207,7 +221,11 @@ export default function ThreeMapCanvas({
     controls.update();
   }, [selectedLocationId]);
 
-  return <div className="three-map-canvas" ref={hostRef} />;
+  return (
+    <div className="three-map-canvas" ref={hostRef}>
+      {canvasError && <div className="map-render-error">{canvasError}</div>}
+    </div>
+  );
 }
 
 function frameWarehouse(camera: THREE.PerspectiveCamera, controls: OrbitControls, group: THREE.Group) {
