@@ -24,6 +24,7 @@ export default function ThreeMapCanvas({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const meshesRef = useRef<LocationMesh[]>([]);
 
@@ -38,21 +39,28 @@ export default function ThreeMapCanvas({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#eef2f5');
+    scene.fog = new THREE.Fog('#eef2f5', 90, 180);
     sceneRef.current = scene;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     hostElement.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(48, 52, 72);
+    camera.position.set(54, 58, 70);
     cameraRef.current = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
     controls.target.set(20, 0, 20);
     controls.maxPolarAngle = Math.PI * 0.48;
+    controls.minDistance = 18;
+    controls.maxDistance = 145;
+    controlsRef.current = controls;
 
     const ambient = new THREE.HemisphereLight('#ffffff', '#a8b0b7', 2.1);
     scene.add(ambient);
@@ -60,7 +68,14 @@ export default function ThreeMapCanvas({
     const keyLight = new THREE.DirectionalLight('#ffffff', 2.6);
     keyLight.position.set(20, 60, 30);
     keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.near = 10;
+    keyLight.shadow.camera.far = 140;
     scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight('#dbeafe', 1.1);
+    fillLight.position.set(-40, 34, -16);
+    scene.add(fillLight);
 
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(80, 80),
@@ -70,6 +85,10 @@ export default function ThreeMapCanvas({
     floor.position.set(20, -0.04, 20);
     floor.receiveShadow = true;
     scene.add(floor);
+
+    const grid = new THREE.GridHelper(80, 40, '#94a3b8', '#cbd5e1');
+    grid.position.set(20, 0.02, 20);
+    scene.add(grid);
 
     function resize() {
       const { width, height } = hostElement.getBoundingClientRect();
@@ -118,6 +137,9 @@ export default function ThreeMapCanvas({
       controls.dispose();
       renderer.dispose();
       hostElement.removeChild(renderer.domElement);
+      controlsRef.current = null;
+      sceneRef.current = null;
+      cameraRef.current = null;
     };
   }, [onHoverLocation, onSelectLocation]);
 
@@ -133,6 +155,11 @@ export default function ThreeMapCanvas({
       groupRef.current.traverse((object) => {
         const mesh = object as THREE.Mesh;
         mesh.geometry?.dispose();
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((material) => material.dispose());
+        } else {
+          mesh.material?.dispose();
+        }
       });
     }
 
@@ -147,11 +174,53 @@ export default function ThreeMapCanvas({
     groupRef.current = group;
     meshesRef.current = meshes;
     scene.add(group);
+
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    if (camera && controls && locations.length > 0) {
+      frameWarehouse(camera, controls, group);
+    }
   }, [locations]);
 
   useEffect(() => {
     applyHighlights(meshesRef.current, hoveredLocationId, selectedLocationId);
   }, [hoveredLocationId, selectedLocationId, locations]);
 
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    if (!camera || !controls || !selectedLocationId) {
+      return;
+    }
+
+    const selectedMesh = meshesRef.current.find((mesh) => mesh.userData.locationId === selectedLocationId);
+
+    if (!selectedMesh) {
+      return;
+    }
+
+    const target = new THREE.Vector3();
+    selectedMesh.getWorldPosition(target);
+    controls.target.lerp(target, 0.55);
+    controls.update();
+  }, [selectedLocationId]);
+
   return <div className="three-map-canvas" ref={hostRef} />;
+}
+
+function frameWarehouse(camera: THREE.PerspectiveCamera, controls: OrbitControls, group: THREE.Group) {
+  const bounds = new THREE.Box3().setFromObject(group);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3());
+  const maxSize = Math.max(size.x, size.y, size.z, 1);
+  const distance = maxSize * 1.65;
+
+  controls.target.copy(center);
+  camera.position.set(center.x + distance * 0.72, center.y + distance * 0.88, center.z + distance);
+  camera.near = Math.max(distance / 120, 0.1);
+  camera.far = distance * 8;
+  camera.updateProjectionMatrix();
+  controls.update();
 }
