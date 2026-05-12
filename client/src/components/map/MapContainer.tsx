@@ -5,6 +5,7 @@ interface MapContainerProps {
   locations: Location[];
   hoveredLocationId: string | null;
   selectedLocationId: string | null;
+  searchedLocationIds: string[];
   onHoverLocation: (locationId: string | null) => void;
   onSelectLocation: (locationId: string) => void;
 }
@@ -13,6 +14,7 @@ export default function MapContainer({
   locations,
   hoveredLocationId,
   selectedLocationId,
+  searchedLocationIds,
   onHoverLocation,
   onSelectLocation
 }: MapContainerProps) {
@@ -22,6 +24,7 @@ export default function MapContainer({
         locations={locations}
         hoveredLocationId={hoveredLocationId}
         selectedLocationId={selectedLocationId}
+        searchedLocationIds={searchedLocationIds}
         onHoverLocation={onHoverLocation}
         onSelectLocation={onSelectLocation}
       />

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import BottomNav from './components/layout/BottomNav';
 import Sidebar from './components/layout/Sidebar';
-import TopBar from './components/layout/TopBar';
 import MapContainer from './components/map/MapContainer';
 import { useLocations } from './hooks/useLocations';
 import { useMapSelection } from './hooks/useMapSelection';
@@ -26,6 +25,7 @@ export default function App() {
       );
     });
   }, [locations, query]);
+  const searchedLocationIds = query.trim() ? filteredLocations.map((location) => location.id) : [];
 
   return (
     <div className="app-shell">
@@ -38,11 +38,11 @@ export default function App() {
         onSelectLocation={selection.setSelectedLocationId}
       />
       <main className="main-panel">
-        <TopBar />
         <MapContainer
           locations={locations}
           selectedLocationId={selection.selectedLocationId}
           hoveredLocationId={selection.hoveredLocationId}
+          searchedLocationIds={searchedLocationIds}
           onHoverLocation={selection.setHoveredLocationId}
           onSelectLocation={selection.setSelectedLocationId}
         />

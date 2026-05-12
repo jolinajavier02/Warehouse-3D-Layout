@@ -9,7 +9,7 @@ interface SidebarProps {
   onSelectLocation: (locationId: string) => void;
 }
 
-const filters: LocationType[] = ['Shop', 'Path', 'Dock', 'Rack', 'Office'];
+const filters: LocationType[] = ['Layout Zone', 'Shelf', 'Nestainer', 'Main Aisle', 'Work Area'];
 
 export default function Sidebar({
   query,
@@ -21,13 +21,12 @@ export default function Sidebar({
 }: SidebarProps) {
   return (
     <aside className="sidebar">
-      <div className="brand-mark">WH</div>
       <label className="search-field">
         <span>Search</span>
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Shop, dock, rack..."
+          placeholder="Shelf, nestainer, zone..."
           type="search"
         />
       </label>

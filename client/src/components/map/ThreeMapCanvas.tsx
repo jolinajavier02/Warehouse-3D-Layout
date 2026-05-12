@@ -10,6 +10,7 @@ interface ThreeMapCanvasProps {
   locations: Location[];
   hoveredLocationId: string | null;
   selectedLocationId: string | null;
+  searchedLocationIds: string[];
   onHoverLocation: (locationId: string | null) => void;
   onSelectLocation: (locationId: string) => void;
 }
@@ -18,6 +19,7 @@ export default function ThreeMapCanvas({
   locations,
   hoveredLocationId,
   selectedLocationId,
+  searchedLocationIds,
   onHoverLocation,
   onSelectLocation
 }: ThreeMapCanvasProps) {
@@ -167,13 +169,7 @@ export default function ThreeMapCanvas({
     if (groupRef.current) {
       scene.remove(groupRef.current);
       groupRef.current.traverse((object) => {
-        const mesh = object as THREE.Mesh;
-        mesh.geometry?.dispose();
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach((material) => material.dispose());
-        } else {
-          mesh.material?.dispose();
-        }
+        disposeRenderable(object);
       });
     }
 
@@ -198,8 +194,8 @@ export default function ThreeMapCanvas({
   }, [locations]);
 
   useEffect(() => {
-    applyHighlights(meshesRef.current, hoveredLocationId, selectedLocationId);
-  }, [hoveredLocationId, selectedLocationId, locations]);
+    applyHighlights(meshesRef.current, hoveredLocationId, selectedLocationId, new Set(searchedLocationIds));
+  }, [hoveredLocationId, selectedLocationId, searchedLocationIds, locations]);
 
   useEffect(() => {
     const camera = cameraRef.current;
@@ -241,4 +237,28 @@ function frameWarehouse(camera: THREE.PerspectiveCamera, controls: OrbitControls
   camera.far = distance * 8;
   camera.updateProjectionMatrix();
   controls.update();
+}
+
+function disposeRenderable(object: THREE.Object3D) {
+  const renderable = object as THREE.Mesh | THREE.Sprite;
+  const geometry = (renderable as THREE.Mesh).geometry;
+  const material = renderable.material;
+
+  geometry?.dispose();
+
+  if (Array.isArray(material)) {
+    material.forEach(disposeMaterial);
+  } else {
+    disposeMaterial(material);
+  }
+}
+
+function disposeMaterial(material?: THREE.Material) {
+  if (!material) {
+    return;
+  }
+
+  const textureMaterial = material as THREE.Material & { map?: THREE.Texture };
+  textureMaterial.map?.dispose();
+  material.dispose();
 }

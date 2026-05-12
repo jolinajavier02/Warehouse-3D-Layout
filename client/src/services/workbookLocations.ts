@@ -152,7 +152,7 @@ function parseFacilityLocation(row: WorkbookRow) {
     baseZ: Math.min(z0, z1) * MM_TO_M,
     width: Math.max(Math.abs(x1 - x0) * MM_TO_M, MIN_FOOTPRINT),
     depth: Math.max(Math.abs(y1 - y0) * MM_TO_M, MIN_FOOTPRINT),
-    height: Math.max(Math.abs(z1 - z0) * MM_TO_M, type === 'Boundary' ? 0.12 : 0.03),
+    height: Math.max(Math.abs(z1 - z0) * MM_TO_M, defaultFacilityHeight(type)),
     description: `${type} from Facility sheet${code ? ` (${code})` : ''}.`
   };
 }
@@ -266,6 +266,23 @@ function defaultHeight(type: LocationType) {
   }
 
   return 1.8;
+}
+
+function defaultFacilityHeight(type: LocationType) {
+  if (type === 'Pillar') {
+    return 4;
+  }
+  if (type === 'Gate') {
+    return 3.5;
+  }
+  if (type === 'Wall') {
+    return 2.8;
+  }
+  if (type === 'Boundary') {
+    return 0.12;
+  }
+
+  return 0.03;
 }
 
 function ascendingPair(left: number, right: number): [number, number] {

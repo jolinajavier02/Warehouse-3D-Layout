@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchLocations } from '../services/api';
+import { fetchWorkbookLocations } from '../services/workbookLocations';
 import type { Location } from '../types/location';
 
 interface UseLocationsResult {
@@ -20,7 +21,13 @@ export function useLocations(): UseLocationsResult {
       try {
         setLoading(true);
         setError(null);
-        const nextLocations = await fetchLocations();
+        let nextLocations: Location[];
+
+        try {
+          nextLocations = await fetchWorkbookLocations();
+        } catch {
+          nextLocations = await fetchLocations();
+        }
 
         if (!ignore) {
           setLocations(nextLocations);
