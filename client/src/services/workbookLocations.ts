@@ -38,6 +38,25 @@ const facilityTypeLabels: Record<string, LocationType> = {
   'work area': 'Work Area'
 };
 
+const validLocationTypes = new Set<LocationType>([
+  'Boundary',
+  'Layout Zone',
+  'Main Aisle',
+  'Work Area',
+  'Pillar',
+  'Gate',
+  'Wall',
+  'Non-placeable Area',
+  'Shelf',
+  'Nestainer',
+  'Operation Area',
+  'Shop',
+  'Path',
+  'Dock',
+  'Rack',
+  'Office'
+]);
+
 export async function fetchWorkbookLocations(workbookPath = DEFAULT_WORKBOOK_PATH): Promise<Location[]> {
   if (!window.XLSX) {
     throw new Error('Excel parser is not loaded');
@@ -49,10 +68,23 @@ export async function fetchWorkbookLocations(workbookPath = DEFAULT_WORKBOOK_PAT
     throw new Error(`Failed to load workbook: ${response.status}`);
   }
 
-  const workbook = window.XLSX.read(await response.arrayBuffer(), { type: 'array' });
+  return parseWorkbookLocationsFromBuffer(await response.arrayBuffer());
+}
+
+export function parseWorkbookLocationsFromBuffer(buffer: ArrayBuffer): Location[] {
+  if (!window.XLSX) {
+    throw new Error('Excel parser is not loaded');
+  }
+
+  const workbook = window.XLSX.read(buffer, { type: 'array' });
   const sheetRows = Object.fromEntries(
     workbook.SheetNames.map((sheetName) => [sheetName, readSheetRows(workbook, sheetName)])
   );
+  const locationSheetRows = workbook.SheetNames.map((sheetName) => sheetRows[sheetName] ?? []).find(hasLocationSchema);
+
+  if (locationSheetRows) {
+    return locationSheetRows.map(parseLocationSchemaRow).filter((location) => location !== null);
+  }
 
   return buildLocationsFromWorkbook({
     facilityRows: sheetRows.Facility ?? [],
@@ -60,6 +92,44 @@ export async function fetchWorkbookLocations(workbookPath = DEFAULT_WORKBOOK_PAT
     planRows: sheetRows.Plan ?? [],
     patternRows: sheetRows.PatternResult ?? []
   });
+}
+
+function hasLocationSchema(rows: WorkbookRow[]) {
+  if (rows.length === 0) {
+    return false;
+  }
+
+  const keys = new Set(Object.keys(rows[0]));
+  return ['id', 'type', 'xmin', 'ymin', 'xmax', 'ymax'].every((key) => keys.has(key));
+}
+
+function parseLocationSchemaRow(row: WorkbookRow): Location | null {
+  const id = normalizeString(row.id);
+  const type = resolveLocationType(row.type);
+
+  if (!id || !type) {
+    return null;
+  }
+
+  return {
+    id,
+    type,
+    name: normalizeString(row.name) || id,
+    xMin: numberValue(row.xmin),
+    yMin: numberValue(row.ymin),
+    xMax: numberValue(row.xmax),
+    yMax: numberValue(row.ymax),
+    zMin: numberValue(row.zmin),
+    zMax: row.zmax == null || row.zmax === '' ? numberValue(row.zmin) + defaultHeight(type) : numberValue(row.zmax),
+    description: normalizeString(row.description) || undefined
+  };
+}
+
+function resolveLocationType(value: unknown): LocationType | null {
+  const normalized = normalizeString(value).toLowerCase().replace(/[\s_-]+/g, '');
+  const matched = [...validLocationTypes].find((type) => type.toLowerCase().replace(/[\s_-]+/g, '') === normalized);
+
+  return matched ?? null;
 }
 
 function readSheetRows(workbook: Workbook, sheetName: string): WorkbookRow[] {

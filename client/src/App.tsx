@@ -3,7 +3,8 @@ import MapContainer from './components/map/MapContainer';
 import { useLocations } from './hooks/useLocations';
 import { useMapSelection } from './hooks/useMapSelection';
 import { parseLocationsCsv } from './services/csvLocations';
-import type { Location } from './types/location';
+import { parseWorkbookLocationsFromBuffer } from './services/workbookLocations';
+import type { Location, LocationType } from './types/location';
 
 type Page = 'home' | 'data' | 'layout' | 'analytics';
 
@@ -13,26 +14,26 @@ const emptyWarehouseLocations: Location[] = [
   {
     id: 'boundary_empty',
     type: 'Boundary',
-    name: 'White Warehouse Boundary',
+    name: 'Gray Warehouse Boundary',
     xMin: 0,
     yMin: 0,
     xMax: 92,
     yMax: 58,
     zMin: 0,
     zMax: 0.1,
-    description: 'White warehouse boundary after deleting data'
+    description: 'Gray warehouse boundary after deleting data'
   },
   {
     id: 'base_empty',
     type: 'Layout Zone',
-    name: 'Gray Base Surface',
+    name: 'White Base Surface',
     xMin: 3,
     yMin: 3,
     xMax: 89,
     yMax: 55,
     zMin: 0.1,
     zMax: 0.14,
-    description: 'Gray base surface after deleting data'
+    description: 'White base surface after deleting data'
   }
 ];
 
@@ -42,6 +43,8 @@ const navItems: Array<{ id: Page; label: string; icon: string }> = [
   { id: 'layout', label: 'Layout Strategy', icon: '▤' },
   { id: 'analytics', label: 'Analytics', icon: '⌁' }
 ];
+
+const editableLocationTypes: LocationType[] = ['Boundary', 'Layout Zone', 'Shop', 'Path', 'Gate'];
 
 export default function App() {
   const { locations: defaultLocations, loading, error } = useLocations();
@@ -71,51 +74,93 @@ export default function App() {
   function handleUpload(file: File) {
     setDataError(null);
 
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setDataError('Please upload a CSV file using the location schema.');
+    if (!isSupportedDataFile(file)) {
+      setDataError('Please upload a CSV or Excel file using the location schema.');
       return;
     }
 
     const reader = new FileReader();
 
     reader.onload = () => {
-      const csv = String(reader.result ?? '');
-      const parsed = parseLocationsCsv(csv);
+      const parsed = file.name.toLowerCase().endsWith('.csv')
+        ? parseLocationsCsv(String(reader.result ?? ''))
+        : parseWorkbookLocationsFromBuffer(reader.result as ArrayBuffer);
 
       if (parsed.length === 0) {
-        setDataError('No valid location rows were found in this CSV.');
+        setDataError('No valid location rows were found in this file.');
         return;
       }
 
       setUploadedLocations(parsed);
       setUploadedFileName(file.name);
       setActivePage('layout');
-      window.localStorage.setItem(uploadedCsvStorageKey, csv);
-      window.localStorage.setItem(uploadedNameStorageKey, file.name);
+      persistLocations(parsed, file.name);
     };
 
     reader.onerror = () => setDataError('The file could not be read.');
-    reader.readAsText(file);
+
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
   }
 
   function handleDeleteDataset() {
-    const csv = locationsToCsv(emptyWarehouseLocations);
-
     setUploadedLocations(emptyWarehouseLocations);
     setUploadedFileName('empty-warehouse.csv');
     setDataError(null);
-    window.localStorage.setItem(uploadedCsvStorageKey, csv);
-    window.localStorage.setItem(uploadedNameStorageKey, 'empty-warehouse.csv');
+    selection.setHoveredLocationId(null);
+    selection.setSelectedLocationId(null);
+    persistLocations(emptyWarehouseLocations, 'empty-warehouse.csv');
   }
 
   function handleDeleteRow(locationId: string) {
     setUploadedLocations((current) => {
       const source = current ?? locations;
       const nextLocations = source.filter((location) => location.id !== locationId);
-      const csv = locationsToCsv(nextLocations);
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
-      window.localStorage.setItem(uploadedCsvStorageKey, csv);
-      window.localStorage.setItem(uploadedNameStorageKey, uploadedFileName ?? 'edited-layout.csv');
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleAddShopRow() {
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
+      const nextLocation: Location = {
+        id: uniqueLocationId(source, `shop_${nextShopNumber}`),
+        type: 'Shop',
+        name: `New Shop ${nextShopNumber}`,
+        xMin: 6,
+        yMin: 6,
+        xMax: 14,
+        yMax: 12,
+        zMin: 0.14,
+        zMax: 3.4,
+        description: 'New uploaded shop'
+      };
+      const nextLocations = [...source, nextLocation];
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleUpdateRow(locationId: string, patch: Partial<Location>) {
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      const nextLocations = source.map((location) => (location.id === locationId ? { ...location, ...patch } : location));
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
       setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
 
       return nextLocations;
@@ -160,6 +205,8 @@ export default function App() {
             onUpload={handleUpload}
             onDeleteDataset={handleDeleteDataset}
             onDeleteRow={handleDeleteRow}
+            onAddShopRow={handleAddShopRow}
+            onUpdateRow={handleUpdateRow}
           />
         )}
         {activePage === 'layout' && (
@@ -220,7 +267,9 @@ function DataGovernancePage({
   error,
   onUpload,
   onDeleteDataset,
-  onDeleteRow
+  onDeleteRow,
+  onAddShopRow,
+  onUpdateRow
 }: {
   locations: Location[];
   uploadedFileName: string | null;
@@ -230,6 +279,8 @@ function DataGovernancePage({
   onUpload: (file: File) => void;
   onDeleteDataset: () => void;
   onDeleteRow: (locationId: string) => void;
+  onAddShopRow: () => void;
+  onUpdateRow: (locationId: string, patch: Partial<Location>) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const stats = buildStats(locations);
@@ -251,12 +302,12 @@ function DataGovernancePage({
           <small>WORKBOOK</small>
           <strong>{uploadedFileName ?? 'location-30-shops.csv'}</strong>
         </div>
-        <input accept=".csv,text/csv" hidden onChange={handleFileChange} ref={inputRef} type="file" />
+        <input accept=".csv,.xlsx,.xls,text/csv" hidden onChange={handleFileChange} ref={inputRef} type="file" />
         <button type="button" onClick={() => inputRef.current?.click()}>
-          Upload .csv
+          Upload .csv/.xlsx
         </button>
-        <button className="danger-button" disabled={!uploadedFileName} type="button" onClick={onDeleteDataset}>
-          Delete Upload
+        <button className="danger-button" type="button" onClick={onDeleteDataset}>
+          Delete Data
         </button>
       </div>
 
@@ -279,8 +330,8 @@ function DataGovernancePage({
 
         <section className="data-table-panel">
           <div className="table-toolbar">
-            <button type="button" onClick={() => inputRef.current?.click()}>
-              + Add Data File
+            <button type="button" onClick={onAddShopRow}>
+              + Add Shop Row
             </button>
             <p>Uploaded data is local and becomes the source for the 3D map.</p>
           </div>
@@ -304,16 +355,48 @@ function DataGovernancePage({
               <tbody>
                 {locations.map((location) => (
                   <tr key={location.id}>
-                    <td>{location.id}</td>
-                    <td>{location.type}</td>
-                    <td>{location.name}</td>
-                    <td>{location.xMin}</td>
-                    <td>{location.yMin}</td>
-                    <td>{location.zMin}</td>
-                    <td>{location.xMax}</td>
-                    <td>{location.yMax}</td>
-                    <td>{location.zMax}</td>
-                    <td>{location.description}</td>
+                    <td>
+                      <input value={location.id} onChange={(event) => onUpdateRow(location.id, { id: event.target.value })} />
+                    </td>
+                    <td>
+                      <select
+                        value={location.type}
+                        onChange={(event) => onUpdateRow(location.id, { type: event.target.value as LocationType })}
+                      >
+                        {editableLocationTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input value={location.name} onChange={(event) => onUpdateRow(location.id, { name: event.target.value })} />
+                    </td>
+                    <td>
+                      <NumberCell location={location} field="xMin" onUpdateRow={onUpdateRow} />
+                    </td>
+                    <td>
+                      <NumberCell location={location} field="yMin" onUpdateRow={onUpdateRow} />
+                    </td>
+                    <td>
+                      <NumberCell location={location} field="zMin" onUpdateRow={onUpdateRow} />
+                    </td>
+                    <td>
+                      <NumberCell location={location} field="xMax" onUpdateRow={onUpdateRow} />
+                    </td>
+                    <td>
+                      <NumberCell location={location} field="yMax" onUpdateRow={onUpdateRow} />
+                    </td>
+                    <td>
+                      <NumberCell location={location} field="zMax" onUpdateRow={onUpdateRow} />
+                    </td>
+                    <td>
+                      <input
+                        value={location.description ?? ''}
+                        onChange={(event) => onUpdateRow(location.id, { description: event.target.value })}
+                      />
+                    </td>
                     <td>
                       <button aria-label={`Delete ${location.name}`} type="button" onClick={() => onDeleteRow(location.id)}>
                         ×
@@ -349,6 +432,24 @@ function DataGovernancePage({
         </aside>
       </div>
     </section>
+  );
+}
+
+function NumberCell({
+  location,
+  field,
+  onUpdateRow
+}: {
+  location: Location;
+  field: 'xMin' | 'yMin' | 'zMin' | 'xMax' | 'yMax' | 'zMax';
+  onUpdateRow: (locationId: string, patch: Partial<Location>) => void;
+}) {
+  return (
+    <input
+      type="number"
+      value={location[field]}
+      onChange={(event) => onUpdateRow(location.id, { [field]: numberInputValue(event.target.value) })}
+    />
   );
 }
 
@@ -422,6 +523,36 @@ function buildStats(locations: Location[]) {
     signs: locations.filter((location) => location.type === 'Gate').length,
     lanes: locations.filter((location) => location.type === 'Path').length
   };
+}
+
+function persistLocations(locations: Location[], fileName: string) {
+  window.localStorage.setItem(uploadedCsvStorageKey, locationsToCsv(locations));
+  window.localStorage.setItem(uploadedNameStorageKey, fileName);
+}
+
+function uniqueLocationId(locations: Location[], preferredId: string) {
+  const ids = new Set(locations.map((location) => location.id));
+
+  if (!ids.has(preferredId)) {
+    return preferredId;
+  }
+
+  let suffix = 2;
+  while (ids.has(`${preferredId}_${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `${preferredId}_${suffix}`;
+}
+
+function numberInputValue(value: string) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isSupportedDataFile(file: File) {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls');
 }
 
 function locationsToCsv(locations: Location[]) {

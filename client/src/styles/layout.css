@@ -385,6 +385,29 @@
   white-space: nowrap;
 }
 
+.data-table input,
+.data-table select {
+  width: 100%;
+  min-width: 92px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-weight: 800;
+}
+
+.data-table input:focus,
+.data-table select:focus {
+  outline: 2px solid #93c5fd;
+  background: #ffffff;
+}
+
+.data-table input[type='number'] {
+  min-width: 74px;
+}
+
 .data-table td:last-child button {
   border: 0;
   background: transparent;

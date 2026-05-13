@@ -10,6 +10,33 @@ interface UseLocationsResult {
   error: string | null;
 }
 
+const emptyWarehouseLocations: Location[] = [
+  {
+    id: 'boundary_empty',
+    type: 'Boundary',
+    name: 'Gray Warehouse Boundary',
+    xMin: 0,
+    yMin: 0,
+    xMax: 92,
+    yMax: 58,
+    zMin: 0,
+    zMax: 0.1,
+    description: 'Gray warehouse boundary'
+  },
+  {
+    id: 'base_empty',
+    type: 'Layout Zone',
+    name: 'White Base Surface',
+    xMin: 3,
+    yMin: 3,
+    xMax: 89,
+    yMax: 55,
+    zMin: 0.1,
+    zMax: 0.14,
+    description: 'White base surface'
+  }
+];
+
 export function useLocations(): UseLocationsResult {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +57,11 @@ export function useLocations(): UseLocationsResult {
           try {
             nextLocations = await fetchWorkbookLocations();
           } catch {
-            nextLocations = await fetchLocations();
+            try {
+              nextLocations = await fetchLocations();
+            } catch {
+              nextLocations = emptyWarehouseLocations;
+            }
           }
         }
 

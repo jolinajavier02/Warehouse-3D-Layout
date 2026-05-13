@@ -1,6 +1,6 @@
 id,type,name,xMin,yMin,xMax,yMax,zMin,zMax,description
-boundary_30,Boundary,White Warehouse Boundary,0,0,92,58,0,0.1,"White warehouse outer boundary"
-floor_30,Layout Zone,Gray Base Surface,3,3,89,55,0.1,0.14,"Gray inner warehouse base surface and walking space"
+boundary_30,Boundary,Gray Warehouse Boundary,0,0,92,58,0,0.1,"Gray warehouse outer boundary"
+floor_30,Layout Zone,White Base Surface,3,3,89,55,0.1,0.14,"White inner warehouse base surface and walking space"
 lane_top,Path,Small Shop Lane,9,10.2,75,11,0.15,0.2,"Small awareness lane between upper shops"
 lane_middle,Path,Small Central Lane,29.5,25.4,66.5,26.2,0.15,0.2,"Small awareness lane through central shops"
 lane_bottom,Path,Small Lower Lane,8,46.5,63,47.3,0.15,0.2,"Small awareness lane between lower shops"

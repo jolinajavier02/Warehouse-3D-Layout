@@ -10,8 +10,8 @@ export type LocationMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMater
 };
 
 const typeColors: Record<LocationType, string> = {
-  Boundary: '#f8fafc',
-  'Layout Zone': '#9aa3a6',
+  Boundary: '#9aa3a6',
+  'Layout Zone': '#ffffff',
   'Main Aisle': '#d9ebfb',
   'Work Area': '#fed7aa',
   Pillar: '#334155',
@@ -42,9 +42,10 @@ const shopAccentColors = [
 ];
 
 export function createLocationMesh(location: Location): LocationMesh {
-  const width = Math.max(location.xMax - location.xMin, 0.1);
-  const depth = Math.max(location.yMax - location.yMin, 0.1);
-  const height = Math.max(location.zMax - location.zMin, 0.1);
+  const bounds = normalizedBounds(location);
+  const width = Math.max(bounds.xMax - bounds.xMin, 0.1);
+  const depth = Math.max(bounds.yMax - bounds.yMin, 0.1);
+  const height = Math.max(bounds.zMax - bounds.zMin, 0.1);
   const geometry = new THREE.BoxGeometry(width, height, depth);
   const baseColor = new THREE.Color(colorForLocation(location));
   const material = new THREE.MeshStandardMaterial({
@@ -61,9 +62,9 @@ export function createLocationMesh(location: Location): LocationMesh {
   const mesh = new THREE.Mesh(geometry, material) as LocationMesh;
 
   mesh.position.set(
-    location.xMin + width / 2,
-    location.zMin + height / 2,
-    location.yMin + depth / 2
+    bounds.xMin + width / 2,
+    bounds.zMin + height / 2,
+    bounds.yMin + depth / 2
   );
   mesh.castShadow = location.type === 'Shop' || location.type === 'Gate';
   mesh.receiveShadow = true;
@@ -94,9 +95,10 @@ export function buildLocationGroup(locations: Location[]) {
 }
 
 function createLocationEdges(location: Location) {
-  const width = Math.max(location.xMax - location.xMin, 0.1);
-  const depth = Math.max(location.yMax - location.yMin, 0.1);
-  const height = Math.max(location.zMax - location.zMin, 0.1);
+  const bounds = normalizedBounds(location);
+  const width = Math.max(bounds.xMax - bounds.xMin, 0.1);
+  const depth = Math.max(bounds.yMax - bounds.yMin, 0.1);
+  const height = Math.max(bounds.zMax - bounds.zMin, 0.1);
   const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(width, height, depth));
   const material = new THREE.LineBasicMaterial({
     color: edgeColorForLocation(location),
@@ -107,9 +109,9 @@ function createLocationEdges(location: Location) {
   const edges = new THREE.LineSegments(geometry, material);
 
   edges.position.set(
-    location.xMin + width / 2,
-    location.zMin + height / 2,
-    location.yMin + depth / 2
+    bounds.xMin + width / 2,
+    bounds.zMin + height / 2,
+    bounds.yMin + depth / 2
   );
   edges.renderOrder = 6;
 
@@ -143,9 +145,10 @@ function createLocationLabel(location: Location) {
     context.fillText(label, paddingX, fontSize / 2 + paddingY, canvas.width - paddingX * 2);
   }
 
-  const width = Math.max(location.xMax - location.xMin, 0.1);
-  const depth = Math.max(location.yMax - location.yMin, 0.1);
-  const height = Math.max(location.zMax - location.zMin, 0.1);
+  const bounds = normalizedBounds(location);
+  const width = Math.max(bounds.xMax - bounds.xMin, 0.1);
+  const depth = Math.max(bounds.yMax - bounds.yMin, 0.1);
+  const height = Math.max(bounds.zMax - bounds.zMin, 0.1);
   const texture = new THREE.CanvasTexture(canvas);
   const material = new THREE.SpriteMaterial({
     map: texture,
@@ -156,9 +159,9 @@ function createLocationLabel(location: Location) {
   const sprite = new THREE.Sprite(material);
 
   sprite.position.set(
-    location.xMin + width / 2,
-    location.zMin + height + 0.28,
-    location.yMin + depth / 2
+    bounds.xMin + width / 2,
+    bounds.zMin + height + 0.28,
+    bounds.yMin + depth / 2
   );
   sprite.scale.set(Math.min(Math.max(width, depth, 1.8), 6), Math.min(Math.max(width, depth, 1.8), 6) / 4, 1);
   sprite.renderOrder = 10;
@@ -166,13 +169,24 @@ function createLocationLabel(location: Location) {
   return sprite;
 }
 
+function normalizedBounds(location: Location) {
+  return {
+    xMin: Math.min(location.xMin, location.xMax),
+    xMax: Math.max(location.xMin, location.xMax),
+    yMin: Math.min(location.yMin, location.yMax),
+    yMax: Math.max(location.yMin, location.yMax),
+    zMin: Math.min(location.zMin, location.zMax),
+    zMax: Math.max(location.zMin, location.zMax)
+  };
+}
+
 function colorForLocation(location: Location) {
   if (location.type === 'Boundary') {
-    return '#f8fafc';
+    return '#9aa3a6';
   }
 
   if (location.type === 'Layout Zone') {
-    return '#9aa3a6';
+    return '#ffffff';
   }
 
   if (location.type === 'Shop') {

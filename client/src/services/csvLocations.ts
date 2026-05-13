@@ -38,7 +38,7 @@ export function parseLocationsCsv(csv: string): Location[] {
     return [];
   }
 
-  const headers = rows[0].map((header) => header.trim());
+  const headers = rows[0].map(normalizeHeader);
 
   return rows
     .slice(1)
@@ -101,8 +101,8 @@ function rowToRecord(headers: string[], row: string[]) {
 }
 
 function toLocation(record: Record<string, string>): Location | null {
-  const type = toLocationType(record.type);
-  const id = record.id.trim();
+  const type = toLocationType(valueFor(record, 'type'));
+  const id = valueFor(record, 'id').trim();
 
   if (!id || !type) {
     return null;
@@ -111,23 +111,56 @@ function toLocation(record: Record<string, string>): Location | null {
   return {
     id,
     type,
-    name: record.name.trim() || id,
-    xMin: numberValue(record.xMin),
-    yMin: numberValue(record.yMin),
-    xMax: numberValue(record.xMax),
-    yMax: numberValue(record.yMax),
-    zMin: numberValue(record.zMin),
-    zMax: numberValue(record.zMax),
-    description: record.description.trim() || undefined
+    name: valueFor(record, 'name').trim() || id,
+    xMin: numberValue(valueFor(record, 'xmin')),
+    yMin: numberValue(valueFor(record, 'ymin')),
+    xMax: numberValue(valueFor(record, 'xmax')),
+    yMax: numberValue(valueFor(record, 'ymax')),
+    zMin: numberValue(valueFor(record, 'zmin')),
+    zMax: zMaxValue(record, type),
+    description: valueFor(record, 'description').trim() || undefined
   };
 }
 
+function normalizeHeader(header: string) {
+  return header.trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function valueFor(record: Record<string, string>, field: string) {
+  return record[field] ?? '';
+}
+
+function zMaxValue(record: Record<string, string>, type: LocationType) {
+  const value = valueFor(record, 'zmax');
+
+  if (value.trim() !== '') {
+    return numberValue(value);
+  }
+
+  return numberValue(valueFor(record, 'zmin')) + defaultHeight(type);
+}
+
 function toLocationType(value: string): LocationType | null {
-  const normalized = value.trim() as LocationType;
-  return validLocationTypes.has(normalized) ? normalized : null;
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  const matched = [...validLocationTypes].find((type) => type.toLowerCase().replace(/[\s_-]+/g, '') === normalized);
+
+  return matched ?? null;
 }
 
 function numberValue(value: string) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function defaultHeight(type: LocationType) {
+  if (type === 'Boundary') {
+    return 0.1;
+  }
+  if (type === 'Layout Zone' || type === 'Path') {
+    return 0.08;
+  }
+  if (type === 'Gate') {
+    return 2.2;
+  }
+  return 3.4;
 }

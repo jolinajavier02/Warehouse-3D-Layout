@@ -42,7 +42,7 @@ export default function ThreeMapCanvas({
     const hostElement = host;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#eef2f5');
+    scene.background = new THREE.Color('#ffffff');
     sceneRef.current = scene;
 
     let renderer: THREE.WebGLRenderer;
@@ -230,8 +230,9 @@ function frameWarehouse(camera: THREE.OrthographicCamera, controls: OrbitControl
   const bounds = new THREE.Box3().setFromObject(group);
   const center = bounds.getCenter(new THREE.Vector3());
   const size = bounds.getSize(new THREE.Vector3());
-  const viewHeight = Math.max(size.z * 1.75, size.x * 1.38 / Math.max(aspect, 0.1), 72);
+  const viewHeight = Math.max(size.z * 1.9, size.x * 1.5 / Math.max(aspect, 0.1), 86);
 
+  camera.zoom = 1;
   controls.target.copy(center);
   camera.position.set(center.x + 80, center.y + 84, center.z + 86);
   camera.near = 0.1;
