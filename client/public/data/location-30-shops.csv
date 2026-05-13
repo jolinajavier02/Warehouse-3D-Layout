@@ -1,5 +1,6 @@
 id,type,name,xMin,yMin,xMax,yMax,zMin,zMax,description
-boundary_30,Boundary,Main Boundary,0,0,92,58,0,0.12,"Dark warehouse boundary and open walking space"
+boundary_30,Boundary,Gray Warehouse Boundary,0,0,92,58,0,0.1,"Gray warehouse outer boundary"
+floor_30,Layout Zone,White Warehouse Floor,3,3,89,55,0.1,0.16,"White inner warehouse floor and walking space"
 shop_1,Shop,Accessories,10,5,16,9,0.12,3.4,"Accessories shop"
 shop_2,Shop,Active Lifestyle,16.4,5,22.2,9,0.12,3.4,"Active lifestyle shop"
 shop_3,Shop,Bags & Footwear,22.6,5,29.4,9,0.12,3.4,"Bags and footwear shop"

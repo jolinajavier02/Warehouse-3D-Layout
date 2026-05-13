@@ -90,15 +90,6 @@ export default function ThreeMapCanvas({
     fillLight.position.set(-40, 34, -16);
     scene.add(fillLight);
 
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(110, 78),
-      new THREE.MeshStandardMaterial({ color: '#eef2f5', roughness: 0.86 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(46, -0.06, 29);
-    floor.receiveShadow = true;
-    scene.add(floor);
-
     function resize() {
       const { width, height } = hostElement.getBoundingClientRect();
       renderer.setSize(width, height, false);

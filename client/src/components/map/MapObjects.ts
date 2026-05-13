@@ -10,7 +10,7 @@ export type LocationMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMater
 
 const typeColors: Record<LocationType, string> = {
   Boundary: '#313833',
-  'Layout Zone': '#bfdbfe',
+  'Layout Zone': '#f8fafc',
   'Main Aisle': '#d9ebfb',
   'Work Area': '#fed7aa',
   Pillar: '#334155',
@@ -27,6 +27,19 @@ const typeColors: Record<LocationType, string> = {
   Office: '#ef4444'
 };
 
+const shopAccentColors = [
+  '#dc2626',
+  '#7c3aed',
+  '#db2777',
+  '#ea580c',
+  '#0891b2',
+  '#2563eb',
+  '#16a34a',
+  '#ca8a04',
+  '#ef4444',
+  '#4f46e5'
+];
+
 export function createLocationMesh(location: Location): LocationMesh {
   const width = Math.max(location.xMax - location.xMin, 0.1);
   const depth = Math.max(location.yMax - location.yMin, 0.1);
@@ -35,10 +48,11 @@ export function createLocationMesh(location: Location): LocationMesh {
   const baseColor = new THREE.Color(colorForLocation(location));
   const material = new THREE.MeshStandardMaterial({
     color: baseColor,
-    roughness: location.type === 'Boundary' ? 0.88 : 0.55,
+    roughness: location.type === 'Boundary' || location.type === 'Layout Zone' ? 0.88 : 0.52,
     metalness: 0.05,
     transparent: false,
-    opacity: 1
+    opacity: 1,
+    side: THREE.DoubleSide
   });
   const mesh = new THREE.Mesh(geometry, material) as LocationMesh;
 
@@ -63,11 +77,33 @@ export function buildLocationGroup(locations: Location[]) {
     group.add(mesh);
 
     if (location.type === 'Shop' || location.type === 'Gate') {
+      group.add(createLocationEdges(location));
+    }
+
+    if (location.type === 'Shop' || location.type === 'Gate') {
       group.add(createLocationLabel(location));
     }
   });
 
   return group;
+}
+
+function createLocationEdges(location: Location) {
+  const width = Math.max(location.xMax - location.xMin, 0.1);
+  const depth = Math.max(location.yMax - location.yMin, 0.1);
+  const height = Math.max(location.zMax - location.zMin, 0.1);
+  const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(width, height, depth));
+  const material = new THREE.LineBasicMaterial({ color: edgeColorForLocation(location) });
+  const edges = new THREE.LineSegments(geometry, material);
+
+  edges.position.set(
+    location.xMin + width / 2,
+    location.zMin + height / 2,
+    location.yMin + depth / 2
+  );
+  edges.renderOrder = 6;
+
+  return edges;
 }
 
 function createLocationLabel(location: Location) {
@@ -121,6 +157,10 @@ function createLocationLabel(location: Location) {
 }
 
 function colorForLocation(location: Location) {
+  if (location.type === 'Shop') {
+    return '#d9dee2';
+  }
+
   if (location.type === 'Gate') {
     const label = labelForLocation(location);
 
@@ -134,6 +174,14 @@ function colorForLocation(location: Location) {
   return typeColors[location.type];
 }
 
+function edgeColorForLocation(location: Location) {
+  if (location.type !== 'Shop') {
+    return colorForLocation(location);
+  }
+
+  return shopAccentColors[shopIndex(location.id) % shopAccentColors.length];
+}
+
 function labelForLocation(location: Location) {
   if (location.type !== 'Gate') {
     return location.name || location.id;
@@ -145,6 +193,11 @@ function labelForLocation(location: Location) {
   }
 
   return text.includes('entrance') ? 'ENTRANCE' : 'EXIT';
+}
+
+function shopIndex(id: string) {
+  const numericSuffix = Number.parseInt(id.replace(/\D+/g, ''), 10);
+  return Number.isFinite(numericSuffix) ? Math.max(numericSuffix - 1, 0) : 0;
 }
 
 function roundRect(
