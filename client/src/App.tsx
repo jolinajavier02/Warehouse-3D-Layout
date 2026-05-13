@@ -8,33 +8,13 @@ import type { Location, LocationType } from './types/location';
 
 type Page = 'home' | 'data' | 'layout' | 'analytics';
 
-const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv';
-const uploadedNameStorageKey = 'warehouse-layout-uploaded-name';
-const emptyWarehouseLocations: Location[] = [
-  {
-    id: 'boundary_empty',
-    type: 'Boundary',
-    name: 'Gray Warehouse Boundary',
-    xMin: 0,
-    yMin: 0,
-    xMax: 92,
-    yMax: 58,
-    zMin: 0,
-    zMax: 0.1,
-    description: 'Gray warehouse boundary after deleting data'
-  },
-  {
-    id: 'base_empty',
-    type: 'Layout Zone',
-    name: 'White Base Surface',
-    xMin: 3,
-    yMin: 3,
-    xMax: 89,
-    yMax: 55,
-    zMin: 0.1,
-    zMax: 0.14,
-    description: 'White base surface after deleting data'
-  }
+const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv-v3-plan-overlay';
+const uploadedNameStorageKey = 'warehouse-layout-uploaded-name-v3-plan-overlay';
+const obsoleteStorageKeys = [
+  'warehouse-layout-uploaded-csv',
+  'warehouse-layout-uploaded-name',
+  'warehouse-layout-uploaded-csv-v2-dimensions',
+  'warehouse-layout-uploaded-name-v2-dimensions'
 ];
 
 const navItems: Array<{ id: Page; label: string; icon: string }> = [
@@ -57,18 +37,18 @@ export default function App() {
   const stats = useMemo(() => buildStats(locations), [locations]);
 
   useEffect(() => {
+    obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
+
     const savedCsv = window.localStorage.getItem(uploadedCsvStorageKey);
     const savedName = window.localStorage.getItem(uploadedNameStorageKey);
 
-    if (!savedCsv) {
+    if (savedCsv === null) {
       return;
     }
 
     const parsed = parseLocationsCsv(savedCsv);
-    if (parsed.length > 0) {
-      setUploadedLocations(parsed);
-      setUploadedFileName(savedName || 'uploaded-layout.csv');
-    }
+    setUploadedLocations(parsed);
+    setUploadedFileName(savedName || 'uploaded-layout.csv');
   }, []);
 
   function handleUpload(file: File) {
@@ -106,15 +86,6 @@ export default function App() {
     }
   }
 
-  function handleDeleteDataset() {
-    setUploadedLocations(emptyWarehouseLocations);
-    setUploadedFileName('empty-warehouse.csv');
-    setDataError(null);
-    selection.setHoveredLocationId(null);
-    selection.setSelectedLocationId(null);
-    persistLocations(emptyWarehouseLocations, 'empty-warehouse.csv');
-  }
-
   function handleDeleteRow(locationId: string) {
     setUploadedLocations((current) => {
       const source = current ?? locations;
@@ -123,6 +94,8 @@ export default function App() {
 
       persistLocations(nextLocations, nextFileName);
       setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+      selection.setHoveredLocationId(null);
+      selection.setSelectedLocationId(null);
 
       return nextLocations;
     });
@@ -203,7 +176,6 @@ export default function App() {
             loading={loading}
             error={error}
             onUpload={handleUpload}
-            onDeleteDataset={handleDeleteDataset}
             onDeleteRow={handleDeleteRow}
             onAddShopRow={handleAddShopRow}
             onUpdateRow={handleUpdateRow}
@@ -266,7 +238,6 @@ function DataGovernancePage({
   loading,
   error,
   onUpload,
-  onDeleteDataset,
   onDeleteRow,
   onAddShopRow,
   onUpdateRow
@@ -277,13 +248,11 @@ function DataGovernancePage({
   loading: boolean;
   error: string | null;
   onUpload: (file: File) => void;
-  onDeleteDataset: () => void;
   onDeleteRow: (locationId: string) => void;
   onAddShopRow: () => void;
   onUpdateRow: (locationId: string, patch: Partial<Location>) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const stats = buildStats(locations);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const [file] = event.target.files ?? [];
@@ -304,36 +273,19 @@ function DataGovernancePage({
         </div>
         <input accept=".csv,.xlsx,.xls,text/csv" hidden onChange={handleFileChange} ref={inputRef} type="file" />
         <button type="button" onClick={() => inputRef.current?.click()}>
-          Upload .csv/.xlsx
-        </button>
-        <button className="danger-button" type="button" onClick={onDeleteDataset}>
-          Delete Data
+          Upload Data
         </button>
       </div>
 
       <div className="data-workspace">
-        <aside className="sheet-list">
-          <h3>Sheets</h3>
-          <button className="active" type="button">
-            Facility <span>{locations.length} x 10</span>
-          </button>
-          <button type="button">
-            Shops <span>{stats.shops} rows</span>
-          </button>
-          <button type="button">
-            Signs <span>{stats.signs} rows</span>
-          </button>
-          <button type="button">
-            Lanes <span>{stats.lanes} rows</span>
-          </button>
-        </aside>
-
         <section className="data-table-panel">
           <div className="table-toolbar">
             <button type="button" onClick={onAddShopRow}>
               + Add Shop Row
             </button>
-            <p>Uploaded data is local and becomes the source for the 3D map.</p>
+            <p>
+              {dataError || error || (loading ? 'Loading default layout...' : 'Uploaded data is local and becomes the source for the 3D map.')}
+            </p>
           </div>
           <div className="data-table-scroll">
             <table className="data-table">
@@ -406,30 +358,9 @@ function DataGovernancePage({
                 ))}
               </tbody>
             </table>
+            {locations.length === 0 && <div className="empty-data-state">No data rows. Upload data to build the 3D map.</div>}
           </div>
         </section>
-
-        <aside className="validation-report">
-          <h3>Data Validation Report</h3>
-          <section>
-            <h4>Visualization</h4>
-            {loading && <p>Loading default layout...</p>}
-            {error && <p className="report-error">{error}</p>}
-            {dataError && <p className="report-error">{dataError}</p>}
-            <ul>
-              <li>{stats.blocks} total blocks</li>
-              <li>{stats.shops} shops</li>
-              <li>{stats.signs} signs</li>
-              <li>{stats.lanes} lane markers</li>
-            </ul>
-          </section>
-          <section>
-            <h4>All Checks</h4>
-            <CheckRow label="Required columns" ok />
-            <CheckRow label="Valid location types" ok={!dataError} />
-            <CheckRow label="Map-ready rows" ok={locations.length > 0} />
-          </section>
-        </aside>
       </div>
     </section>
   );
@@ -504,15 +435,6 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </article>
-  );
-}
-
-function CheckRow({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <div className="check-row">
-      <strong>{label}</strong>
-      <span className={ok ? 'ok' : 'error'}>{ok ? 'OK' : 'ERROR'}</span>
-    </div>
   );
 }
 

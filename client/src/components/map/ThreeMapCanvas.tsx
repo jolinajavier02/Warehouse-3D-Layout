@@ -94,10 +94,10 @@ export default function ThreeMapCanvas({
       const { width, height } = hostElement.getBoundingClientRect();
       renderer.setSize(width, height, false);
 
-      if (groupRef.current) {
+      if (groupRef.current && groupRef.current.children.length > 0) {
         frameWarehouse(camera, controls, groupRef.current, width / Math.max(height, 1));
       } else {
-        setOrthographicFrame(camera, 120, width / Math.max(height, 1));
+        frameEmptyMap(camera, controls, width / Math.max(height, 1));
       }
     }
 
@@ -183,6 +183,9 @@ export default function ThreeMapCanvas({
     if (camera && controls && locations.length > 0) {
       const { width, height } = hostRef.current?.getBoundingClientRect() ?? { width: 1, height: 1 };
       frameWarehouse(camera, controls, group, width / Math.max(height, 1));
+    } else if (camera && controls) {
+      const { width, height } = hostRef.current?.getBoundingClientRect() ?? { width: 1, height: 1 };
+      frameEmptyMap(camera, controls, width / Math.max(height, 1));
     }
   }, [locations]);
 
@@ -249,6 +252,16 @@ function setOrthographicFrame(camera: THREE.OrthographicCamera, viewHeight: numb
   camera.top = viewHeight / 2;
   camera.bottom = -viewHeight / 2;
   camera.updateProjectionMatrix();
+}
+
+function frameEmptyMap(camera: THREE.OrthographicCamera, controls: OrbitControls, aspect: number) {
+  camera.zoom = 1;
+  controls.target.set(0, 0, 0);
+  camera.position.set(80, 84, 86);
+  camera.near = 0.1;
+  camera.far = 600;
+  setOrthographicFrame(camera, 86, aspect);
+  controls.update();
 }
 
 function disposeRenderable(object: THREE.Object3D) {

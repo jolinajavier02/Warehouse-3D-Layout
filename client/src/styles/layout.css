@@ -290,7 +290,7 @@
 
 .data-workspace {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -353,11 +353,20 @@
 }
 
 .data-table-scroll {
+  position: relative;
   overflow: auto;
   max-height: calc(100vh - 230px);
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.empty-data-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  color: #64748b;
+  font-weight: 900;
 }
 
 .data-table {
