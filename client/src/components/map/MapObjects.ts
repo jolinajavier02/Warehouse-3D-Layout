@@ -59,7 +59,7 @@ export function createLocationMesh(location: Location): LocationMesh {
     depthTest: true,
     depthWrite: true,
     fog: false,
-    side: THREE.FrontSide
+    side: THREE.DoubleSide
   });
   const mesh = new THREE.Mesh(geometry, material) as LocationMesh;
 

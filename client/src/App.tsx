@@ -105,14 +105,15 @@ export default function App() {
     setUploadedLocations((current) => {
       const source = current ?? locations;
       const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
+      const bounds = findAvailableShopBounds(source, 8, 6);
       const nextLocation: Location = {
         id: uniqueLocationId(source, `shop_${nextShopNumber}`),
         type: 'Shop',
         name: `New Shop ${nextShopNumber}`,
-        xMin: 6,
-        yMin: 6,
-        xMax: 14,
-        yMax: 12,
+        xMin: bounds.xMin,
+        yMin: bounds.yMin,
+        xMax: bounds.xMax,
+        yMax: bounds.yMax,
         zMin: 0.14,
         zMax: 3.4,
         description: 'New uploaded shop'
@@ -465,6 +466,102 @@ function uniqueLocationId(locations: Location[], preferredId: string) {
   }
 
   return `${preferredId}_${suffix}`;
+}
+
+function findAvailableShopBounds(locations: Location[], width: number, depth: number) {
+  const container = findPlacementContainer(locations, width, depth);
+  const occupied = locations
+    .filter((location) => location.type !== 'Boundary' && location.type !== 'Layout Zone' && location.type !== 'Path')
+    .map(normalizedBounds2d);
+  const gap = 1.2;
+  const step = 1;
+  const xStart = container.xMin + gap;
+  const yStart = container.yMin + gap;
+  const xLimit = container.xMax - width - gap;
+  const yLimit = container.yMax - depth - gap;
+
+  for (let y = yStart; y <= yLimit; y += step) {
+    for (let x = xStart; x <= xLimit; x += step) {
+      const candidate = {
+        xMin: roundCoordinate(x),
+        yMin: roundCoordinate(y),
+        xMax: roundCoordinate(x + width),
+        yMax: roundCoordinate(y + depth)
+      };
+
+      if (!occupied.some((block) => rectanglesOverlap(candidate, block, gap))) {
+        return candidate;
+      }
+    }
+  }
+
+  const fallbackX = Math.max(container.xMin + gap, maxX(occupied) + gap);
+  const fallbackY = yStart;
+
+  return {
+    xMin: roundCoordinate(fallbackX),
+    yMin: roundCoordinate(fallbackY),
+    xMax: roundCoordinate(fallbackX + width),
+    yMax: roundCoordinate(fallbackY + depth)
+  };
+}
+
+function findPlacementContainer(locations: Location[], width: number, depth: number) {
+  const candidates = locations
+    .filter((location) => location.type === 'Layout Zone' || location.type === 'Boundary')
+    .map(normalizedBounds2d)
+    .filter((bounds) => bounds.xMax - bounds.xMin >= width + 2 && bounds.yMax - bounds.yMin >= depth + 2)
+    .sort((a, b) => rectangleArea(b) - rectangleArea(a));
+
+  if (candidates.length > 0) {
+    return candidates[0];
+  }
+
+  if (locations.length === 0) {
+    return { xMin: 0, yMin: 0, xMax: width + 4, yMax: depth + 4 };
+  }
+
+  const bounds = locations.map(normalizedBounds2d);
+  return {
+    xMin: Math.min(...bounds.map((location) => location.xMin)),
+    yMin: Math.min(...bounds.map((location) => location.yMin)),
+    xMax: Math.max(...bounds.map((location) => location.xMax)) + width + 4,
+    yMax: Math.max(...bounds.map((location) => location.yMax)) + depth + 4
+  };
+}
+
+function normalizedBounds2d(location: Pick<Location, 'xMin' | 'yMin' | 'xMax' | 'yMax'>) {
+  return {
+    xMin: Math.min(location.xMin, location.xMax),
+    yMin: Math.min(location.yMin, location.yMax),
+    xMax: Math.max(location.xMin, location.xMax),
+    yMax: Math.max(location.yMin, location.yMax)
+  };
+}
+
+function rectanglesOverlap(
+  first: ReturnType<typeof normalizedBounds2d>,
+  second: ReturnType<typeof normalizedBounds2d>,
+  gap: number
+) {
+  return !(
+    first.xMax + gap <= second.xMin ||
+    first.xMin - gap >= second.xMax ||
+    first.yMax + gap <= second.yMin ||
+    first.yMin - gap >= second.yMax
+  );
+}
+
+function rectangleArea(bounds: ReturnType<typeof normalizedBounds2d>) {
+  return (bounds.xMax - bounds.xMin) * (bounds.yMax - bounds.yMin);
+}
+
+function maxX(bounds: Array<ReturnType<typeof normalizedBounds2d>>) {
+  return bounds.length > 0 ? Math.max(...bounds.map((location) => location.xMax)) : 0;
+}
+
+function roundCoordinate(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function numberInputValue(value: string) {
