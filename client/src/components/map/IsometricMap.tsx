@@ -79,7 +79,6 @@ export default function IsometricMap({
   const shopLocations = locations.filter((location) => location.type === 'Shop');
   const wayLocations = locations.filter((location) => location.type === 'Path');
   const laneGuides = wayLocations.map((location) => buildLaneGuide(location, project));
-  const intersections = buildIntersections(wayLocations, project);
   const amenities = buildAmenityMarkers(locations, project);
   const blocks = shopLocations
     .map((location) => buildBlock(location, project, searched, selectedLocationId, hoveredLocationId))
@@ -87,7 +86,6 @@ export default function IsometricMap({
   const baseViewBox = buildViewBox([
     ...blocks.flatMap((block) => block.points),
     ...laneGuides.flatMap((lane) => lane.points),
-    ...intersections.map((intersection) => intersection.point),
     ...amenities.map((amenity) => amenity.point)
   ]);
   const viewBox = applyViewTransform(baseViewBox, zoom, offset);
@@ -123,14 +121,6 @@ export default function IsometricMap({
           <polyline points={pointsToString(lane.centerLine)} />
           <text x={lane.labelPoint.x} y={lane.labelPoint.y}>
             {lane.label}
-          </text>
-        </g>
-      ))}
-      {intersections.map((intersection) => (
-        <g className="iso-intersection" key={intersection.id}>
-          <circle cx={intersection.point.x} cy={intersection.point.y} r="13" />
-          <text x={intersection.point.x} y={intersection.point.y + 3}>
-            +
           </text>
         </g>
       ))}
@@ -434,38 +424,27 @@ function buildLaneGuide(location: Location, project: (x: number, y: number, z?: 
     location,
     points,
     centerLine,
-    label: isVertical ? 'North/South Way' : 'East/West Way',
+    label: location.name.toLowerCase().includes('way') ? 'WAY' : isVertical ? 'North/South Way' : 'East/West Way',
     labelPoint: project(midX, midY, laneZ + 0.18)
   };
 }
 
-function buildIntersections(locations: Location[], project: (x: number, y: number, z?: number) => Point) {
-  const intersections: Array<{ id: string; point: Point }> = [];
+function buildAmenityMarkers(locations: Location[], project: (x: number, y: number, z?: number) => Point) {
+  const signLocations = locations.filter((location) => location.type === 'Gate');
 
-  for (let leftIndex = 0; leftIndex < locations.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < locations.length; rightIndex += 1) {
-      const left = locations[leftIndex];
-      const right = locations[rightIndex];
-      const xMin = Math.max(left.xMin, right.xMin);
-      const yMin = Math.max(left.yMin, right.yMin);
-      const xMax = Math.min(left.xMax, right.xMax);
-      const yMax = Math.min(left.yMax, right.yMax);
+  if (signLocations.length > 0) {
+    return signLocations.map((location) => {
+      const label = signLabelFor(location);
 
-      if (xMin >= xMax || yMin >= yMax) {
-        continue;
-      }
-
-      intersections.push({
-        id: `${left.id}-${right.id}`,
-        point: project((xMin + xMax) / 2, (yMin + yMax) / 2, 0.32)
-      });
-    }
+      return {
+        id: `amenity-${location.id}`,
+        kind: label === 'CR' ? 'cr' : 'exit',
+        label,
+        point: project((location.xMin + location.xMax) / 2, (location.yMin + location.yMax) / 2, Math.max(location.zMax, 1.8))
+      };
+    });
   }
 
-  return intersections;
-}
-
-function buildAmenityMarkers(locations: Location[], project: (x: number, y: number, z?: number) => Point) {
   const boundary = locations.find((location) => location.type === 'Boundary');
   const verticalPath = locations.find((location) => location.id.includes('vert')) ?? locations.find((location) => location.type === 'Path');
   const horizontalPath =
@@ -510,6 +489,16 @@ function buildAmenityMarkers(locations: Location[], project: (x: number, y: numb
       point: project(boundary.xMax - 8, midY, 1.8)
     }
   ];
+}
+
+function signLabelFor(location: Location) {
+  const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+
+  if (text.includes('cr') || text.includes('restroom') || text.includes('bathroom')) {
+    return 'CR';
+  }
+
+  return 'EXIT';
 }
 
 function buildViewBox(points: Point[]): ViewBox {
