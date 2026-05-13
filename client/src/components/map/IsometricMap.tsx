@@ -16,8 +16,8 @@ interface Point {
 }
 
 const typeColors: Record<LocationType, string> = {
-  Boundary: '#8b949e',
-  'Layout Zone': '#c7d8ee',
+  Boundary: '#f8fafc',
+  'Layout Zone': '#9aa3a6',
   'Main Aisle': '#40505a',
   'Work Area': '#f2a65f',
   Pillar: '#374151',

@@ -9,6 +9,32 @@ type Page = 'home' | 'data' | 'layout' | 'analytics';
 
 const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv';
 const uploadedNameStorageKey = 'warehouse-layout-uploaded-name';
+const emptyWarehouseLocations: Location[] = [
+  {
+    id: 'boundary_empty',
+    type: 'Boundary',
+    name: 'White Warehouse Boundary',
+    xMin: 0,
+    yMin: 0,
+    xMax: 92,
+    yMax: 58,
+    zMin: 0,
+    zMax: 0.1,
+    description: 'White warehouse boundary after deleting data'
+  },
+  {
+    id: 'base_empty',
+    type: 'Layout Zone',
+    name: 'Gray Base Surface',
+    xMin: 3,
+    yMin: 3,
+    xMax: 89,
+    yMax: 55,
+    zMin: 0.1,
+    zMax: 0.14,
+    description: 'Gray base surface after deleting data'
+  }
+];
 
 const navItems: Array<{ id: Page; label: string; icon: string }> = [
   { id: 'home', label: 'Home', icon: '⌂' },
@@ -73,11 +99,13 @@ export default function App() {
   }
 
   function handleDeleteDataset() {
-    setUploadedLocations(null);
-    setUploadedFileName(null);
+    const csv = locationsToCsv(emptyWarehouseLocations);
+
+    setUploadedLocations(emptyWarehouseLocations);
+    setUploadedFileName('empty-warehouse.csv');
     setDataError(null);
-    window.localStorage.removeItem(uploadedCsvStorageKey);
-    window.localStorage.removeItem(uploadedNameStorageKey);
+    window.localStorage.setItem(uploadedCsvStorageKey, csv);
+    window.localStorage.setItem(uploadedNameStorageKey, 'empty-warehouse.csv');
   }
 
   function handleDeleteRow(locationId: string) {

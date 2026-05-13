@@ -10,8 +10,8 @@ export type LocationMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMater
 };
 
 const typeColors: Record<LocationType, string> = {
-  Boundary: '#313833',
-  'Layout Zone': '#f8fafc',
+  Boundary: '#f8fafc',
+  'Layout Zone': '#9aa3a6',
   'Main Aisle': '#d9ebfb',
   'Work Area': '#fed7aa',
   Pillar: '#334155',
@@ -167,6 +167,14 @@ function createLocationLabel(location: Location) {
 }
 
 function colorForLocation(location: Location) {
+  if (location.type === 'Boundary') {
+    return '#f8fafc';
+  }
+
+  if (location.type === 'Layout Zone') {
+    return '#9aa3a6';
+  }
+
   if (location.type === 'Shop') {
     return '#d3d8dc';
   }
