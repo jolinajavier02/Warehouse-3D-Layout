@@ -26,7 +26,7 @@ export default function ThreeMapCanvas({
 }: ThreeMapCanvasProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const meshesRef = useRef<LocationMesh[]>([]);
@@ -43,7 +43,6 @@ export default function ThreeMapCanvas({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#eef2f5');
-    scene.fog = new THREE.Fog('#eef2f5', 90, 180);
     sceneRef.current = scene;
 
     let renderer: THREE.WebGLRenderer;
@@ -62,23 +61,24 @@ export default function ThreeMapCanvas({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     hostElement.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(54, 58, 70);
+    const camera = new THREE.OrthographicCamera(-60, 60, 40, -40, 0.1, 1000);
+    camera.position.set(126, 112, 118);
     cameraRef.current = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(20, 0, 20);
+    controls.target.set(46, 0, 29);
     controls.maxPolarAngle = Math.PI * 0.48;
-    controls.minDistance = 18;
-    controls.maxDistance = 145;
+    controls.enablePan = false;
+    controls.minZoom = 0.75;
+    controls.maxZoom = 2.4;
     controlsRef.current = controls;
 
-    const ambient = new THREE.HemisphereLight('#ffffff', '#a8b0b7', 2.1);
+    const ambient = new THREE.HemisphereLight('#ffffff', '#a8b0b7', 1.6);
     scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight('#ffffff', 2.6);
+    const keyLight = new THREE.DirectionalLight('#ffffff', 2.0);
     keyLight.position.set(20, 60, 30);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(2048, 2048);
@@ -86,15 +86,19 @@ export default function ThreeMapCanvas({
     keyLight.shadow.camera.far = 140;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight('#dbeafe', 1.1);
+    const fillLight = new THREE.DirectionalLight('#dbeafe', 0.8);
     fillLight.position.set(-40, 34, -16);
     scene.add(fillLight);
 
     function resize() {
       const { width, height } = hostElement.getBoundingClientRect();
       renderer.setSize(width, height, false);
-      camera.aspect = width / Math.max(height, 1);
-      camera.updateProjectionMatrix();
+
+      if (groupRef.current) {
+        frameWarehouse(camera, controls, groupRef.current, width / Math.max(height, 1));
+      } else {
+        setOrthographicFrame(camera, 120, width / Math.max(height, 1));
+      }
     }
 
     const resizeObserver = new ResizeObserver(resize);
@@ -164,7 +168,7 @@ export default function ThreeMapCanvas({
     const group = buildLocationGroup(locations);
     const meshes: LocationMesh[] = [];
     group.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
+      if (object instanceof THREE.Mesh && (object.userData.locationType === 'Shop' || object.userData.locationType === 'Gate')) {
         meshes.push(object as LocationMesh);
       }
     });
@@ -177,7 +181,8 @@ export default function ThreeMapCanvas({
     const controls = controlsRef.current;
 
     if (camera && controls && locations.length > 0) {
-      frameWarehouse(camera, controls, group);
+      const { width, height } = hostRef.current?.getBoundingClientRect() ?? { width: 1, height: 1 };
+      frameWarehouse(camera, controls, group, width / Math.max(height, 1));
     }
   }, [locations]);
 
@@ -221,19 +226,28 @@ export default function ThreeMapCanvas({
   );
 }
 
-function frameWarehouse(camera: THREE.PerspectiveCamera, controls: OrbitControls, group: THREE.Group) {
+function frameWarehouse(camera: THREE.OrthographicCamera, controls: OrbitControls, group: THREE.Group, aspect: number) {
   const bounds = new THREE.Box3().setFromObject(group);
   const center = bounds.getCenter(new THREE.Vector3());
   const size = bounds.getSize(new THREE.Vector3());
-  const maxSize = Math.max(size.x, size.y, size.z, 1);
-  const distance = maxSize * 1.65;
+  const viewHeight = Math.max(size.z * 1.75, size.x * 1.38 / Math.max(aspect, 0.1), 72);
 
   controls.target.copy(center);
-  camera.position.set(center.x + distance * 0.72, center.y + distance * 0.88, center.z + distance);
-  camera.near = Math.max(distance / 120, 0.1);
-  camera.far = distance * 8;
-  camera.updateProjectionMatrix();
+  camera.position.set(center.x + 80, center.y + 84, center.z + 86);
+  camera.near = 0.1;
+  camera.far = 600;
+  setOrthographicFrame(camera, viewHeight, aspect);
   controls.update();
+}
+
+function setOrthographicFrame(camera: THREE.OrthographicCamera, viewHeight: number, aspect: number) {
+  const viewWidth = viewHeight * Math.max(aspect, 0.1);
+
+  camera.left = -viewWidth / 2;
+  camera.right = viewWidth / 2;
+  camera.top = viewHeight / 2;
+  camera.bottom = -viewHeight / 2;
+  camera.updateProjectionMatrix();
 }
 
 function disposeRenderable(object: THREE.Object3D) {

@@ -1,6 +1,6 @@
 import type { Location, LocationType } from '../types/location';
 
-const DEFAULT_CSV_PATH = '/data/location-30-shops.csv';
+const DEFAULT_CSV_PATH = '/data/location-30-shops.csv?v=final-layout-20260513';
 
 const validLocationTypes = new Set<LocationType>([
   'Boundary',
@@ -31,7 +31,7 @@ export async function fetchCsvLocations(csvPath = DEFAULT_CSV_PATH): Promise<Loc
   return parseLocationsCsv(await response.text());
 }
 
-function parseLocationsCsv(csv: string): Location[] {
+export function parseLocationsCsv(csv: string): Location[] {
   const rows = parseCsvRows(csv).filter((row) => row.some((value) => value.trim() !== ''));
 
   if (rows.length < 2) {

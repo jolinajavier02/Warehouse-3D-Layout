@@ -47,20 +47,19 @@
 }
 
 .iso-lane polygon {
-  fill: #3f484b;
-  opacity: 0.82;
-  stroke: #111827;
-  stroke-width: 1.4;
+  fill: #b8c3cb;
+  opacity: 0.9;
+  stroke: #64748b;
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .iso-lane polyline {
   fill: none;
-  stroke: #f8fafc;
-  stroke-dasharray: 8 8;
+  stroke: #64748b;
+  stroke-dasharray: 5 5;
   stroke-linecap: round;
-  marker-end: url("#lane-arrow");
-  stroke-width: 2.5;
+  stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
 
@@ -221,6 +220,35 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.map-hover-card {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  display: grid;
+  gap: 4px;
+  width: min(280px, calc(100vw - 36px));
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+  color: #17202a;
+  pointer-events: none;
+}
+
+.map-hover-card strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.map-hover-card span,
+.map-hover-card small {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .map-status {

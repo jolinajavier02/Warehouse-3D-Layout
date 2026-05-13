@@ -4,6 +4,7 @@ import type { Location, LocationType } from '../../types/location';
 export type LocationMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial> & {
   userData: {
     locationId: string;
+    locationType: LocationType;
     baseColor: THREE.Color;
   };
 };
@@ -21,7 +22,7 @@ const typeColors: Record<LocationType, string> = {
   Nestainer: '#2563eb',
   'Operation Area': '#fecaca',
   Shop: '#cfd4d9',
-  Path: '#4b5258',
+  Path: '#b8c3cb',
   Dock: '#2563eb',
   Rack: '#7c8a96',
   Office: '#ef4444'
@@ -49,10 +50,13 @@ export function createLocationMesh(location: Location): LocationMesh {
   const material = new THREE.MeshStandardMaterial({
     color: baseColor,
     roughness: location.type === 'Boundary' || location.type === 'Layout Zone' ? 0.88 : 0.52,
-    metalness: 0.05,
+    metalness: 0.02,
     transparent: false,
     opacity: 1,
-    side: THREE.DoubleSide
+    depthTest: true,
+    depthWrite: true,
+    fog: false,
+    side: THREE.FrontSide
   });
   const mesh = new THREE.Mesh(geometry, material) as LocationMesh;
 
@@ -61,9 +65,10 @@ export function createLocationMesh(location: Location): LocationMesh {
     location.zMin + height / 2,
     location.yMin + depth / 2
   );
-  mesh.castShadow = location.type !== 'Boundary';
+  mesh.castShadow = location.type === 'Shop' || location.type === 'Gate';
   mesh.receiveShadow = true;
   mesh.userData.locationId = location.id;
+  mesh.userData.locationType = location.type;
   mesh.userData.baseColor = baseColor;
 
   return mesh;
@@ -93,7 +98,12 @@ function createLocationEdges(location: Location) {
   const depth = Math.max(location.yMax - location.yMin, 0.1);
   const height = Math.max(location.zMax - location.zMin, 0.1);
   const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(width, height, depth));
-  const material = new THREE.LineBasicMaterial({ color: edgeColorForLocation(location) });
+  const material = new THREE.LineBasicMaterial({
+    color: edgeColorForLocation(location),
+    transparent: true,
+    opacity: location.type === 'Shop' ? 0.82 : 1,
+    fog: false
+  });
   const edges = new THREE.LineSegments(geometry, material);
 
   edges.position.set(
@@ -140,7 +150,7 @@ function createLocationLabel(location: Location) {
   const material = new THREE.SpriteMaterial({
     map: texture,
     transparent: true,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false
   });
   const sprite = new THREE.Sprite(material);
@@ -158,7 +168,11 @@ function createLocationLabel(location: Location) {
 
 function colorForLocation(location: Location) {
   if (location.type === 'Shop') {
-    return '#d9dee2';
+    return '#d3d8dc';
+  }
+
+  if (location.type === 'Path') {
+    return '#c1c9cf';
   }
 
   if (location.type === 'Gate') {

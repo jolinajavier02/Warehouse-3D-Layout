@@ -109,9 +109,6 @@ export default function IsometricMap({
         <filter id="iso-shadow" x="-20%" y="-20%" width="140%" height="150%">
           <feDropShadow dx="0" dy="8" floodColor="#111827" floodOpacity="0.25" stdDeviation="5" />
         </filter>
-        <marker id="lane-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#f8fafc" />
-        </marker>
       </defs>
       <rect className="isometric-bg" x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} />
       {floor && <polygon className="isometric-floor" points={pointsToString(floor)} />}
@@ -346,7 +343,7 @@ function buildBlock(
     isHovered: location.id === hoveredLocationId,
     isSelected: location.id === selectedLocationId,
     isSearched: searched.has(location.id),
-    showDetail: location.type === 'Shop' && (location.id === hoveredLocationId || location.id === selectedLocationId),
+    showDetail: false,
     showLabel: location.type !== 'Boundary' && location.type !== 'Path'
   };
 }

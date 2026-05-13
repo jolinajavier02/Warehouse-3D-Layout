@@ -18,6 +18,11 @@ export default function MapContainer({
   onHoverLocation,
   onSelectLocation
 }: MapContainerProps) {
+  const activeLocation =
+    locations.find((location) => location.id === hoveredLocationId) ??
+    locations.find((location) => location.id === selectedLocationId) ??
+    null;
+
   return (
     <section className="map-container">
       <ThreeMapCanvas
@@ -28,6 +33,16 @@ export default function MapContainer({
         onHoverLocation={onHoverLocation}
         onSelectLocation={onSelectLocation}
       />
+      {activeLocation && activeLocation.type === 'Shop' && (
+        <aside className="map-hover-card" aria-live="polite">
+          <strong>{activeLocation.name}</strong>
+          <span>{activeLocation.description}</span>
+          <small>
+            {Math.abs(activeLocation.xMax - activeLocation.xMin).toFixed(1)} x{' '}
+            {Math.abs(activeLocation.yMax - activeLocation.yMin).toFixed(1)} units
+          </small>
+        </aside>
+      )}
       <p className="map-hint">Pinch or scroll to zoom and drag to rotate</p>
     </section>
   );
