@@ -9,7 +9,7 @@ export type LocationMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMater
 };
 
 const typeColors: Record<LocationType, string> = {
-  Boundary: '#d8dde2',
+  Boundary: '#313833',
   'Layout Zone': '#bfdbfe',
   'Main Aisle': '#d9ebfb',
   'Work Area': '#fed7aa',
@@ -32,13 +32,13 @@ export function createLocationMesh(location: Location): LocationMesh {
   const depth = Math.max(location.yMax - location.yMin, 0.1);
   const height = Math.max(location.zMax - location.zMin, 0.1);
   const geometry = new THREE.BoxGeometry(width, height, depth);
-  const baseColor = new THREE.Color(typeColors[location.type]);
+  const baseColor = new THREE.Color(colorForLocation(location));
   const material = new THREE.MeshStandardMaterial({
     color: baseColor,
-    roughness: 0.55,
+    roughness: location.type === 'Boundary' ? 0.88 : 0.55,
     metalness: 0.05,
-    transparent: location.type === 'Boundary',
-    opacity: location.type === 'Boundary' ? 0.22 : 1
+    transparent: false,
+    opacity: 1
   });
   const mesh = new THREE.Mesh(geometry, material) as LocationMesh;
 
@@ -62,7 +62,7 @@ export function buildLocationGroup(locations: Location[]) {
     const mesh = createLocationMesh(location);
     group.add(mesh);
 
-    if (location.type !== 'Boundary' && location.type !== 'Main Aisle') {
+    if (location.type === 'Shop' || location.type === 'Gate') {
       group.add(createLocationLabel(location));
     }
   });
@@ -73,7 +73,7 @@ export function buildLocationGroup(locations: Location[]) {
 function createLocationLabel(location: Location) {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
-  const label = location.name || location.id;
+  const label = labelForLocation(location);
   const fontSize = 28;
   const paddingX = 18;
   const paddingY = 10;
@@ -118,6 +118,33 @@ function createLocationLabel(location: Location) {
   sprite.renderOrder = 10;
 
   return sprite;
+}
+
+function colorForLocation(location: Location) {
+  if (location.type === 'Gate') {
+    const label = labelForLocation(location);
+
+    if (label === 'CR') {
+      return '#1d4ed8';
+    }
+
+    return label === 'ENTRANCE' ? '#059669' : '#2563eb';
+  }
+
+  return typeColors[location.type];
+}
+
+function labelForLocation(location: Location) {
+  if (location.type !== 'Gate') {
+    return location.name || location.id;
+  }
+
+  const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+  if (text.includes('cr') || text.includes('restroom') || text.includes('bathroom')) {
+    return 'CR';
+  }
+
+  return text.includes('entrance') ? 'ENTRANCE' : 'EXIT';
 }
 
 function roundRect(

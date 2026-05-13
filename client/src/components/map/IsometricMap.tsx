@@ -498,7 +498,7 @@ function signLabelFor(location: Location) {
     return 'CR';
   }
 
-  return 'EXIT';
+  return text.includes('entrance') ? 'ENTRANCE' : 'EXIT';
 }
 
 function buildViewBox(points: Point[]): ViewBox {

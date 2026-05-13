@@ -91,17 +91,13 @@ export default function ThreeMapCanvas({
     scene.add(fillLight);
 
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(80, 80),
-      new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.8 })
+      new THREE.PlaneGeometry(110, 78),
+      new THREE.MeshStandardMaterial({ color: '#eef2f5', roughness: 0.86 })
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(20, -0.04, 20);
+    floor.position.set(46, -0.06, 29);
     floor.receiveShadow = true;
     scene.add(floor);
-
-    const grid = new THREE.GridHelper(80, 40, '#94a3b8', '#cbd5e1');
-    grid.position.set(20, 0.02, 20);
-    scene.add(grid);
 
     function resize() {
       const { width, height } = hostElement.getBoundingClientRect();
