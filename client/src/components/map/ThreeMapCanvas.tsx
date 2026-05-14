@@ -74,7 +74,7 @@ export default function ThreeMapCanvas({
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.enablePan = false;
     controls.enableRotate = !staticView;
-    controls.enableZoom = !staticView;
+    controls.enableZoom = true;
     controls.minZoom = 0.75;
     controls.maxZoom = 2.4;
     controlsRef.current = controls;

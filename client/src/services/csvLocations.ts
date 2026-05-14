@@ -1,6 +1,6 @@
 import type { Location, LocationType } from '../types/location';
 
-const DEFAULT_CSV_PATH = '/data/location-30-shops.csv?v=final-layout-20260513';
+const DEFAULT_CSV_PATH = '/data/location-30-shops.csv?v=doubled-zone-racks-20260514';
 
 const validLocationTypes = new Set<LocationType>([
   'Boundary',

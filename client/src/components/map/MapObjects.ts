@@ -168,6 +168,10 @@ export function buildLocationGroup(locations: Location[]) {
   }
 
   locations.forEach((location) => {
+    if (isOutlineOnly(location)) {
+      return;
+    }
+
     const mesh = createLocationMesh(location);
     group.add(mesh);
 
@@ -180,7 +184,7 @@ export function buildLocationGroup(locations: Location[]) {
       group.add(createLocationEdges(location));
     }
 
-    if (location.type === 'Shop' || location.type === 'Gate') {
+    if (shouldShowLocationLabel(location)) {
       group.add(createLocationLabel(location));
     }
   });
@@ -190,6 +194,20 @@ export function buildLocationGroup(locations: Location[]) {
   }
 
   return group;
+}
+
+function shouldShowLocationLabel(location: Location) {
+  const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+
+  if (text.includes('assigned rack block') || text.includes('position marker')) {
+    return false;
+  }
+
+  return location.type === 'Shop' || location.type === 'Gate';
+}
+
+function isOutlineOnly(location: Location) {
+  return `${location.name} ${location.description ?? ''}`.toLowerCase().includes('outline only');
 }
 
 function createDecorationDetails(location: Location) {
@@ -383,7 +401,41 @@ function createDimensionLayer(locations: Location[], bounds: ReturnType<typeof g
       }
     });
 
+  locations
+    .filter(isOutlineOnly)
+    .forEach((location) => {
+      group.add(createDashedRectangleOutline(normalizedBounds(location), colorForLocation(location), 0.5));
+    });
+
   return group;
+}
+
+function createDashedRectangleOutline(
+  bounds: Pick<ReturnType<typeof normalizedBounds>, 'xMin' | 'xMax' | 'yMin' | 'yMax'>,
+  color: string,
+  z: number
+) {
+  const points = [
+    new THREE.Vector3(bounds.xMin, z, bounds.yMin),
+    new THREE.Vector3(bounds.xMax, z, bounds.yMin),
+    new THREE.Vector3(bounds.xMax, z, bounds.yMax),
+    new THREE.Vector3(bounds.xMin, z, bounds.yMax),
+    new THREE.Vector3(bounds.xMin, z, bounds.yMin)
+  ];
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineDashedMaterial({
+    color,
+    dashSize: 1.2,
+    gapSize: 0.65,
+    depthTest: true,
+    depthWrite: false
+  });
+  const outline = new THREE.Line(geometry, material);
+
+  outline.computeLineDistances();
+  outline.renderOrder = 36;
+
+  return outline;
 }
 
 function createRectangleOutline(

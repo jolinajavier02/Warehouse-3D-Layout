@@ -10,15 +10,21 @@ type Page = 'home' | 'data' | 'layout' | 'builder' | 'analytics';
 type ShapePresetId = 'square' | 'rectangle' | 'long-rectangle' | 'circle' | 'oblong' | 'animal-shape';
 type SignPresetId = 'entrance' | 'exit' | 'cr' | 'fire-exit' | 'fire-extinguisher' | 'gate' | 'way' | 'partition' | 'gap';
 type DecorationPresetId = 'animal-character' | 'tree' | 'person-walking' | 'person-standing' | 'chair-setup';
-type BuilderTool = 'shapes' | 'signs' | 'label' | 'color' | 'decorations' | 'delete';
+type BuilderTool = 'zones' | 'shapes' | 'signs' | 'label' | 'color' | 'decorations' | 'delete';
 
-const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv-v3-plan-overlay';
-const uploadedNameStorageKey = 'warehouse-layout-uploaded-name-v3-plan-overlay';
+const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv-v6-doubled-zone-racks';
+const uploadedNameStorageKey = 'warehouse-layout-uploaded-name-v6-doubled-zone-racks';
 const obsoleteStorageKeys = [
   'warehouse-layout-uploaded-csv',
   'warehouse-layout-uploaded-name',
   'warehouse-layout-uploaded-csv-v2-dimensions',
-  'warehouse-layout-uploaded-name-v2-dimensions'
+  'warehouse-layout-uploaded-name-v2-dimensions',
+  'warehouse-layout-uploaded-csv-v3-plan-overlay',
+  'warehouse-layout-uploaded-name-v3-plan-overlay',
+  'warehouse-layout-uploaded-csv-v4-zone-layout',
+  'warehouse-layout-uploaded-name-v4-zone-layout',
+  'warehouse-layout-uploaded-csv-v5-counted-zone-blocks',
+  'warehouse-layout-uploaded-name-v5-counted-zone-blocks'
 ];
 
 const navItems: Array<{ id: Page; label: string; icon: string }> = [
@@ -183,7 +189,7 @@ export default function App() {
     });
   }
 
-  function handleAddLayoutShape(presetId: ShapePresetId) {
+  function handleAddLayoutShape(presetId: ShapePresetId, zoneId?: string) {
     const preset = shapePresets.find((item) => item.id === presetId);
 
     if (!preset) {
@@ -194,7 +200,7 @@ export default function App() {
       const source = current ?? locations;
       setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
-      const bounds = findAvailableShopBounds(source, preset.width, preset.depth);
+      const bounds = findAvailableShopBounds(source, preset.width, preset.depth, zoneId);
       const nextLocation: Location = {
         id: uniqueLocationId(source, `${preset.id.replace(/-/g, '_')}_${nextShopNumber}`),
         type: 'Shop',
@@ -205,7 +211,7 @@ export default function App() {
         yMax: bounds.yMax,
         zMin: 0.14,
         zMax: preset.height,
-        description: preset.description
+        description: withZoneDescription(preset.description, source, zoneId)
       };
       const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
@@ -217,7 +223,7 @@ export default function App() {
     });
   }
 
-  function handleAddLayoutSign(presetId: SignPresetId) {
+  function handleAddLayoutSign(presetId: SignPresetId, zoneId?: string) {
     const preset = signPresets.find((item) => item.id === presetId);
 
     if (!preset) {
@@ -228,7 +234,7 @@ export default function App() {
       const source = current ?? locations;
       setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextSignNumber = source.filter((location) => location.type === 'Gate').length + 1;
-      const bounds = findAvailableShopBounds(source, 2.4, 1.8);
+      const bounds = findAvailableShopBounds(source, 2.4, 1.8, zoneId);
       const nextLocation: Location = {
         id: uniqueLocationId(source, `${preset.id}_sign_${nextSignNumber}`),
         type: 'Gate',
@@ -239,7 +245,7 @@ export default function App() {
         yMax: bounds.yMax,
         zMin: 0.14,
         zMax: 1.8,
-        description: preset.description
+        description: withZoneDescription(preset.description, source, zoneId)
       };
       const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
@@ -251,7 +257,7 @@ export default function App() {
     });
   }
 
-  function handleAddCustomLayoutShape(width: number, depth: number, height: number) {
+  function handleAddCustomLayoutShape(width: number, depth: number, height: number, zoneId?: string) {
     const safeWidth = Math.max(width, 1);
     const safeDepth = Math.max(depth, 1);
     const safeHeight = Math.max(height, 0.5);
@@ -260,7 +266,7 @@ export default function App() {
       const source = current ?? locations;
       setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
-      const bounds = findAvailableShopBounds(source, safeWidth, safeDepth);
+      const bounds = findAvailableShopBounds(source, safeWidth, safeDepth, zoneId);
       const nextLocation: Location = {
         id: uniqueLocationId(source, `custom_shop_${nextShopNumber}`),
         type: 'Shop',
@@ -271,7 +277,7 @@ export default function App() {
         yMax: bounds.yMax,
         zMin: 0.14,
         zMax: safeHeight,
-        description: `Shape: Custom shop block ${safeWidth} x ${safeDepth} x ${safeHeight}`
+        description: withZoneDescription(`Shape: Custom shop block ${safeWidth} x ${safeDepth} x ${safeHeight}`, source, zoneId)
       };
       const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
@@ -290,7 +296,39 @@ export default function App() {
     updateLayoutWithHistory((source) => upsertPlanContainer(source, type, safeWidth, safeDepth));
   }
 
-  function handleAddDecoration(presetId: DecorationPresetId) {
+  function handleApplyThreeZoneLayout() {
+    updateLayoutWithHistory((source) => applyThreeZoneTemplate(source));
+  }
+
+  function handleAddWay(zoneId?: string) {
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      setLayoutHistory((history) => [source, ...history].slice(0, 30));
+      const nextWayNumber = source.filter((location) => location.type === 'Path').length + 1;
+      const bounds = findAvailableShopBounds(source, 14, 2.2, zoneId);
+      const nextLocation: Location = {
+        id: uniqueLocationId(source, `way_${nextWayNumber}`),
+        type: 'Path',
+        name: `Way ${nextWayNumber}`,
+        xMin: bounds.xMin,
+        yMin: bounds.yMin,
+        xMax: bounds.xMax,
+        yMax: bounds.yMax,
+        zMin: 0.08,
+        zMax: 0.11,
+        description: withZoneDescription('Added way lane; Color: #d8dee6', source, zoneId)
+      };
+      const nextLocations = appendLayoutItem(source, nextLocation);
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleAddDecoration(presetId: DecorationPresetId, zoneId?: string) {
     const preset = decorationPresets.find((item) => item.id === presetId);
 
     if (!preset) {
@@ -301,7 +339,7 @@ export default function App() {
       const source = current ?? locations;
       setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextDecorationNumber = source.filter((location) => location.description?.includes('Decoration:')).length + 1;
-      const bounds = findAvailableShopBounds(source, preset.width, preset.depth);
+      const bounds = findAvailableShopBounds(source, preset.width, preset.depth, zoneId);
       const nextLocation: Location = {
         id: uniqueLocationId(source, `${preset.id.replace(/-/g, '_')}_${nextDecorationNumber}`),
         type: 'Shop',
@@ -312,7 +350,7 @@ export default function App() {
         yMax: bounds.yMax,
         zMin: 0.14,
         zMax: preset.height,
-        description: preset.description
+        description: withZoneDescription(preset.description, source, zoneId)
       };
       const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
@@ -448,6 +486,8 @@ export default function App() {
             onAddShape={handleAddLayoutShape}
             onAddCustomShape={handleAddCustomLayoutShape}
             onApplyCustomContainer={handleApplyCustomContainer}
+            onApplyThreeZoneLayout={handleApplyThreeZoneLayout}
+            onAddWay={handleAddWay}
             onAddSign={handleAddLayoutSign}
             onAddDecoration={handleAddDecoration}
             onApplyLabel={handleApplyLabel}
@@ -695,6 +735,8 @@ function LayoutBuilderPage({
   onAddShape,
   onAddCustomShape,
   onApplyCustomContainer,
+  onApplyThreeZoneLayout,
+  onAddWay,
   onAddSign,
   onAddDecoration,
   onApplyLabel,
@@ -708,18 +750,20 @@ function LayoutBuilderPage({
   error: string | null;
   selection: ReturnType<typeof useMapSelection>;
   canUndo: boolean;
-  onAddShape: (presetId: ShapePresetId) => void;
-  onAddCustomShape: (width: number, depth: number, height: number) => void;
+  onAddShape: (presetId: ShapePresetId, zoneId?: string) => void;
+  onAddCustomShape: (width: number, depth: number, height: number, zoneId?: string) => void;
   onApplyCustomContainer: (type: 'Boundary' | 'Layout Zone', width: number, depth: number) => void;
-  onAddSign: (presetId: SignPresetId) => void;
-  onAddDecoration: (presetId: DecorationPresetId) => void;
+  onApplyThreeZoneLayout: () => void;
+  onAddWay: (zoneId?: string) => void;
+  onAddSign: (presetId: SignPresetId, zoneId?: string) => void;
+  onAddDecoration: (presetId: DecorationPresetId, zoneId?: string) => void;
   onApplyLabel: (locationId: string | null, label: string) => void;
   onApplyColor: (target: string, color: string) => void;
   onDeleteSelected: () => void;
   onUndo: () => void;
   onSave: () => void;
 }) {
-  const [activeTool, setActiveTool] = useState<BuilderTool>('shapes');
+  const [activeTool, setActiveTool] = useState<BuilderTool>('zones');
   const [customWidth, setCustomWidth] = useState(9);
   const [customDepth, setCustomDepth] = useState(6);
   const [customHeight, setCustomHeight] = useState(3.4);
@@ -727,6 +771,9 @@ function LayoutBuilderPage({
   const [colorTarget, setColorTarget] = useState('selected');
   const [colorValue, setColorValue] = useState('#2563eb');
   const selectedLocation = locations.find((location) => location.id === selection.selectedLocationId) ?? null;
+  const zoneOptions = locations.filter((location) => location.type === 'Layout Zone');
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+  const activeZone = zoneOptions.find((zone) => zone.id === selectedZoneId) ?? null;
 
   return (
     <section className="layout-builder-page" aria-label="Add Layout">
@@ -763,21 +810,50 @@ function LayoutBuilderPage({
         {error && <div className="map-status map-status-error">{error}</div>}
       </div>
       <section className="builder-toolbar" aria-label="Builder tools">
+        <div className="zone-picker-bar">
+          <label>
+            Add layout in zone
+            <select value={selectedZoneId} onChange={(event) => setSelectedZoneId(event.target.value)}>
+              <option value="">Auto place in any open zone</option>
+              {zoneOptions.map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span>{activeZone ? `Selected zone: ${activeZone.name}` : 'No zone selected'}</span>
+        </div>
         <div className="builder-tabs">
-          {(['shapes', 'signs', 'label', 'color', 'decorations', 'delete'] as BuilderTool[]).map((tool) => (
+          {(['zones', 'shapes', 'signs', 'label', 'color', 'decorations', 'delete'] as BuilderTool[]).map((tool) => (
             <button className={activeTool === tool ? 'active' : ''} key={tool} type="button" onClick={() => setActiveTool(tool)}>
               {tool}
             </button>
           ))}
         </div>
         <div className="builder-panel">
+          {activeTool === 'zones' && (
+            <>
+              <h3>Zones</h3>
+              <p>Add the three assigned zones, lane gaps, and boundary format from the reference layout.</p>
+              <div className="builder-inline-form">
+                <button type="button" onClick={onApplyThreeZoneLayout}>
+                  Apply 3-Zone Layout
+                </button>
+                <button type="button" onClick={() => onAddWay(selectedZoneId)}>
+                  Add Way In Zone
+                </button>
+                <span>Green receiving zone, peach storage zones, white open zone, gray lane gaps.</span>
+              </div>
+            </>
+          )}
           {activeTool === 'shapes' && (
             <>
               <h3>Shapes</h3>
               <p>Pick a shape and it will be placed in an open area with spacing.</p>
               <div className="tool-button-grid wide-tools">
                 {shapePresets.map((preset) => (
-                  <button key={preset.id} type="button" onClick={() => onAddShape(preset.id)}>
+                  <button key={preset.id} type="button" onClick={() => onAddShape(preset.id, selectedZoneId)}>
                     <span className={`shape-icon shape-${preset.id}`} aria-hidden="true" />
                     <span>{preset.label}</span>
                     <small>
@@ -799,7 +875,7 @@ function LayoutBuilderPage({
                   H
                   <input type="number" min="0.5" step="0.1" value={customHeight} onChange={(event) => setCustomHeight(numberInputValue(event.target.value))} />
                 </label>
-                <button type="button" onClick={() => onAddCustomShape(customWidth, customDepth, customHeight)}>
+                <button type="button" onClick={() => onAddCustomShape(customWidth, customDepth, customHeight, selectedZoneId)}>
                   Add Custom
                 </button>
                 <button type="button" onClick={() => onApplyCustomContainer('Boundary', customWidth, customDepth)}>
@@ -816,7 +892,7 @@ function LayoutBuilderPage({
               <h3>Signs</h3>
               <div className="tool-button-grid wide-tools sign-grid">
                 {signPresets.map((preset) => (
-                  <button key={preset.id} type="button" onClick={() => onAddSign(preset.id)}>
+                  <button key={preset.id} type="button" onClick={() => onAddSign(preset.id, selectedZoneId)}>
                     <span className={`sign-icon sign-${preset.id}`}>{preset.label.slice(0, 2).toUpperCase()}</span>
                     <span>{preset.label}</span>
                   </button>
@@ -858,7 +934,7 @@ function LayoutBuilderPage({
               <h3>Decorations</h3>
               <div className="tool-button-grid wide-tools">
                 {decorationPresets.map((preset) => (
-                  <button key={preset.id} type="button" onClick={() => onAddDecoration(preset.id)}>
+                  <button key={preset.id} type="button" onClick={() => onAddDecoration(preset.id, selectedZoneId)}>
                     <span className={`shape-icon decoration-${preset.id}`} aria-hidden="true" />
                     <span>{preset.label}</span>
                     <small>
@@ -1009,6 +1085,234 @@ function boundsForLocations(locations: Location[]) {
   };
 }
 
+function withZoneDescription(description: string, locations: Location[], zoneId?: string) {
+  const zone = zoneId ? locations.find((location) => location.id === zoneId) : null;
+
+  return zone ? `${description}; Zone: ${zone.name}` : description;
+}
+
+function applyThreeZoneTemplate(locations: Location[]) {
+  const preserved = locations.filter(
+    (location) =>
+      ![
+        'zone_boundary',
+        'zone_open_space',
+        'zone_receiving',
+        'zone_left_storage',
+        'zone_right_storage',
+        'zone_main_aisle',
+        'zone_center_gap',
+        'zone_planning_outline',
+        'zone_top_gap',
+        'zone_left_measure_1',
+        'zone_left_measure_2',
+        'zone_bottom_measure'
+      ].includes(location.id) &&
+      !location.id.startsWith('rack_') &&
+      !location.id.startsWith('marker_') &&
+      !location.id.startsWith('zone_sign_')
+  );
+  const template: Location[] = [
+    {
+      id: 'zone_boundary',
+      type: 'Boundary',
+      name: 'Warehouse Boundary',
+      xMin: 0,
+      yMin: 0,
+      xMax: 100,
+      yMax: 120,
+      zMin: 0,
+      zMax: 0.12,
+      description: 'Assigned zone warehouse boundary; Color: #111827'
+    },
+    {
+      id: 'zone_open_space',
+      type: 'Layout Zone',
+      name: 'Open Zone',
+      xMin: 50,
+      yMin: 0,
+      xMax: 100,
+      yMax: 28,
+      zMin: 0.12,
+      zMax: 0.16,
+      description: 'Unassigned white open zone; Color: #ffffff'
+    },
+    {
+      id: 'zone_receiving',
+      type: 'Layout Zone',
+      name: 'Zone A Receiving',
+      xMin: 0,
+      yMin: 0,
+      xMax: 50,
+      yMax: 28,
+      zMin: 0.13,
+      zMax: 0.18,
+      description: 'Assigned Zone A green receiving area; Color: #dcf5d2'
+    },
+    {
+      id: 'zone_left_storage',
+      type: 'Layout Zone',
+      name: 'Zone B Left Storage',
+      xMin: 0,
+      yMin: 28,
+      xMax: 50,
+      yMax: 120,
+      zMin: 0.13,
+      zMax: 0.18,
+      description: 'Assigned Zone B peach storage area; Color: #fde8dc'
+    },
+    {
+      id: 'zone_right_storage',
+      type: 'Layout Zone',
+      name: 'Zone C Right Storage',
+      xMin: 50,
+      yMin: 28,
+      xMax: 100,
+      yMax: 120,
+      zMin: 0.13,
+      zMax: 0.18,
+      description: 'Assigned Zone C warm storage area; Color: #feead7'
+    },
+    {
+      id: 'zone_main_aisle',
+      type: 'Path',
+      name: 'Main Horizontal Way',
+      xMin: 1,
+      yMin: 82,
+      xMax: 99,
+      yMax: 86.4,
+      zMin: 0.2,
+      zMax: 0.24,
+      description: 'Gray main way gap across the warehouse; Color: #d8dee6'
+    },
+    {
+      id: 'zone_center_gap',
+      type: 'Path',
+      name: 'Center Partition Gap',
+      xMin: 49.6,
+      yMin: 0,
+      xMax: 50.6,
+      yMax: 120,
+      zMin: 0.2,
+      zMax: 0.24,
+      description: 'Center black partition and gap line; Color: #cbd5e1'
+    },
+    {
+      id: 'zone_planning_outline',
+      type: 'Path',
+      name: 'Purple Planning Outline',
+      xMin: 88,
+      yMin: 62,
+      xMax: 99,
+      yMax: 82,
+      zMin: 0.28,
+      zMax: 0.32,
+      description: 'Purple dashed planning outline beside the green row; Color: #7c3aed; Dashed Outline Only'
+    },
+    {
+      id: 'zone_top_gap',
+      type: 'Path',
+      name: 'Top Zone Gap',
+      xMin: 0,
+      yMin: 27.7,
+      xMax: 100,
+      yMax: 28.5,
+      zMin: 0.2,
+      zMax: 0.24,
+      description: 'Horizontal partition between top and storage zones; Color: #cbd5e1'
+    }
+  ];
+  const blockTemplate = [
+    ...createStackedBlocks('rack_zone_b_green_a', 'Zone B Green Row A', 43.6, 35, 44.8, 82, 13, '#9fca8d'),
+    ...createStackedBlocks('rack_zone_b_green_b', 'Zone B Green Row B', 47.2, 35, 48.4, 82, 13, '#9fca8d'),
+    ...createStackedBlocks('rack_zone_c_yellow_main', 'Zone C Yellow Row', 76, 42, 78.2, 82, 15, '#facc15'),
+    ...createStackedBlocks('rack_zone_c_green_side', 'Zone C Green Row', 86.4, 57, 87.7, 82, 7, '#9fca8d'),
+    ...createStackedBlocks('rack_bottom_short_yellow', 'Bottom Yellow Short Row', 16, 86.5, 18.4, 94.5, 3, '#facc15'),
+    ...createDoubleColumnBlocks('rack_bottom_yellow_a', 'Bottom Yellow Row A', 25, 86.5, 29.8, 118, 12, '#facc15'),
+    ...createDoubleColumnBlocks('rack_bottom_yellow_b', 'Bottom Yellow Row B', 36, 86.5, 40.8, 118, 12, '#facc15'),
+    ...createStackedBlocks('rack_bottom_yellow_single', 'Bottom Yellow Single Row', 47, 86.5, 49.2, 118, 12, '#facc15'),
+    ...createMarkerBlocks()
+  ];
+  const structuralTypes = new Set(['Boundary', 'Layout Zone', 'Path']);
+  const nonStructural = preserved.filter((location) => !structuralTypes.has(location.type));
+
+  return [...template, ...blockTemplate, ...nonStructural];
+}
+
+function createStackedBlocks(
+  prefix: string,
+  name: string,
+  xMin: number,
+  yMin: number,
+  xMax: number,
+  yMax: number,
+  count: number,
+  color: string
+) {
+  const gap = 0.18;
+  const blockDepth = (yMax - yMin - gap * (count - 1)) / count;
+
+  return Array.from({ length: count }, (_, index): Location => {
+    const blockYMin = yMin + index * (blockDepth + gap);
+    const blockYMax = blockYMin + blockDepth;
+
+    return {
+      id: `${prefix}_${String(index + 1).padStart(2, '0')}`,
+      type: 'Shop',
+      name: `${name} ${index + 1}`,
+      xMin,
+      yMin: roundCoordinate(blockYMin),
+      xMax,
+      yMax: roundCoordinate(blockYMax),
+      zMin: 0.2,
+      zMax: 2.4,
+      description: `Assigned rack block ${index + 1} of ${count}; Color: ${color}`
+    };
+  });
+}
+
+function createDoubleColumnBlocks(
+  prefix: string,
+  name: string,
+  xMin: number,
+  yMin: number,
+  xMax: number,
+  yMax: number,
+  rows: number,
+  color: string
+) {
+  const columnGap = 0.3;
+  const columnWidth = (xMax - xMin - columnGap) / 2;
+
+  return [
+    ...createStackedBlocks(`${prefix}_left`, `${name} Left`, xMin, yMin, xMin + columnWidth, yMax, rows, color),
+    ...createStackedBlocks(`${prefix}_right`, `${name} Right`, xMax - columnWidth, yMin, xMax, yMax, rows, color)
+  ];
+}
+
+function createMarkerBlocks() {
+  const markerRows = [
+    ...[19, 38, 58, 78, 98].map((y, index) => ({ id: `marker_left_${index + 1}`, xMin: 0.6, xMax: 2, y })),
+    ...[19, 38, 58, 78, 116.8].map((y, index) => ({ id: `marker_center_${index + 1}`, xMin: 49.4, xMax: 50.8, y })),
+    ...[19, 38, 58, 78, 98, 116.8].map((y, index) => ({ id: `marker_right_${index + 1}`, xMin: 98.2, xMax: 99.6, y }))
+  ];
+
+  return markerRows.map(
+    (marker): Location => ({
+      id: marker.id,
+      type: 'Shop',
+      name: 'Position Marker',
+      xMin: marker.xMin,
+      yMin: marker.y,
+      xMax: marker.xMax,
+      yMax: marker.y + 1.4,
+      zMin: 0.2,
+      zMax: 1.1,
+      description: 'Boundary and partition position marker; Color: #1e3a5f'
+    })
+  );
+}
+
 function expandPlanForItem(locations: Location[], item: Location) {
   const itemBounds = normalizedBounds2d(item);
   const padding = 4;
@@ -1031,10 +1335,10 @@ function expandPlanForItem(locations: Location[], item: Location) {
   });
 }
 
-function findAvailableShopBounds(locations: Location[], width: number, depth: number) {
-  const container = findPlacementContainer(locations, width, depth);
+function findAvailableShopBounds(locations: Location[], width: number, depth: number, zoneId?: string) {
+  const container = findPlacementContainer(locations, width, depth, zoneId);
   const occupied = locations
-    .filter((location) => location.type !== 'Boundary' && location.type !== 'Layout Zone' && location.type !== 'Path')
+    .filter((location) => location.type !== 'Boundary' && location.type !== 'Layout Zone')
     .map(normalizedBounds2d);
   const gap = 1.2;
   const step = 1;
@@ -1069,7 +1373,17 @@ function findAvailableShopBounds(locations: Location[], width: number, depth: nu
   };
 }
 
-function findPlacementContainer(locations: Location[], width: number, depth: number) {
+function findPlacementContainer(locations: Location[], width: number, depth: number, zoneId?: string) {
+  const selectedZone = zoneId ? locations.find((location) => location.id === zoneId && location.type === 'Layout Zone') : null;
+
+  if (selectedZone) {
+    const bounds = normalizedBounds2d(selectedZone);
+
+    if (bounds.xMax - bounds.xMin >= width + 2 && bounds.yMax - bounds.yMin >= depth + 2) {
+      return bounds;
+    }
+  }
+
   const candidates = locations
     .filter((location) => location.type === 'Layout Zone' || location.type === 'Boundary')
     .map(normalizedBounds2d)
