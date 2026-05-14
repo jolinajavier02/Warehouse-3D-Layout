@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Location, LocationType } from '../../types/location';
 
-export type LocationMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial> & {
+export type LocationMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> & {
   userData: {
     locationId: string;
     locationType: LocationType;
@@ -48,7 +48,7 @@ export function createLocationMesh(location: Location): LocationMesh {
   const width = Math.max(bounds.xMax - bounds.xMin, 0.1);
   const depth = Math.max(bounds.yMax - bounds.yMin, 0.1);
   const height = Math.max(bounds.zMax - bounds.zMin, 0.1);
-  const geometry = new THREE.BoxGeometry(width, height, depth);
+  const geometry = createLocationGeometry(location, width, height, depth);
   const baseColor = new THREE.Color(colorForLocation(location));
   const material = new THREE.MeshStandardMaterial({
     color: baseColor,
@@ -61,7 +61,7 @@ export function createLocationMesh(location: Location): LocationMesh {
     fog: false,
     side: THREE.DoubleSide
   });
-  const mesh = new THREE.Mesh(geometry, material) as LocationMesh;
+  const mesh = new THREE.Mesh(geometry, material) as unknown as LocationMesh;
 
   mesh.position.set(
     bounds.xMin + width / 2,
@@ -75,6 +75,80 @@ export function createLocationMesh(location: Location): LocationMesh {
   mesh.userData.baseColor = baseColor;
 
   return mesh;
+}
+
+function createLocationGeometry(location: Location, width: number, height: number, depth: number) {
+  if (location.type === 'Shop') {
+    const shape = shapeForLocation(location);
+
+    if (shape === 'circle') {
+      const radius = Math.max(Math.min(width, depth) / 2, 0.2);
+      return new THREE.CylinderGeometry(radius, radius, height, 48);
+    }
+
+    if (shape === 'oblong') {
+      return createExtrudedFootprint(createRoundedRectShape(width, depth, Math.min(width, depth) / 2), height);
+    }
+
+    if (shape === 'animal') {
+      return createExtrudedFootprint(createAnimalShape(width, depth), height);
+    }
+  }
+
+  return new THREE.BoxGeometry(width, height, depth);
+}
+
+function createExtrudedFootprint(shape: THREE.Shape, height: number) {
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: height,
+    bevelEnabled: false,
+    curveSegments: 14
+  });
+
+  geometry.translate(0, 0, -height / 2);
+  geometry.rotateX(-Math.PI / 2);
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
+function createRoundedRectShape(width: number, depth: number, radius: number) {
+  const x = -width / 2;
+  const y = -depth / 2;
+  const w = width;
+  const d = depth;
+  const r = Math.max(0.2, Math.min(radius, w / 2, d / 2));
+  const shape = new THREE.Shape();
+
+  shape.moveTo(x + r, y);
+  shape.lineTo(x + w - r, y);
+  shape.quadraticCurveTo(x + w, y, x + w, y + r);
+  shape.lineTo(x + w, y + d - r);
+  shape.quadraticCurveTo(x + w, y + d, x + w - r, y + d);
+  shape.lineTo(x + r, y + d);
+  shape.quadraticCurveTo(x, y + d, x, y + d - r);
+  shape.lineTo(x, y + r);
+  shape.quadraticCurveTo(x, y, x + r, y);
+
+  return shape;
+}
+
+function createAnimalShape(width: number, depth: number) {
+  const shape = new THREE.Shape();
+  const halfWidth = width / 2;
+  const halfDepth = depth / 2;
+
+  shape.moveTo(-halfWidth * 0.72, -halfDepth * 0.2);
+  shape.lineTo(-halfWidth * 0.52, -halfDepth * 0.62);
+  shape.lineTo(-halfWidth * 0.3, -halfDepth * 0.24);
+  shape.lineTo(halfWidth * 0.3, -halfDepth * 0.24);
+  shape.lineTo(halfWidth * 0.52, -halfDepth * 0.62);
+  shape.lineTo(halfWidth * 0.72, -halfDepth * 0.2);
+  shape.quadraticCurveTo(halfWidth * 0.9, halfDepth * 0.18, halfWidth * 0.5, halfDepth * 0.42);
+  shape.quadraticCurveTo(0, halfDepth * 0.64, -halfWidth * 0.5, halfDepth * 0.42);
+  shape.quadraticCurveTo(-halfWidth * 0.9, halfDepth * 0.18, -halfWidth * 0.72, -halfDepth * 0.2);
+
+  return shape;
 }
 
 export function buildLocationGroup(locations: Location[]) {
@@ -294,7 +368,7 @@ function createLocationEdges(location: Location) {
   const width = Math.max(bounds.xMax - bounds.xMin, 0.1);
   const depth = Math.max(bounds.yMax - bounds.yMin, 0.1);
   const height = Math.max(bounds.zMax - bounds.zMin, 0.1);
-  const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(width, height, depth));
+  const geometry = new THREE.EdgesGeometry(createLocationGeometry(location, width, height, depth));
   const material = new THREE.LineBasicMaterial({
     color: edgeColorForLocation(location),
     transparent: true,
@@ -461,6 +535,24 @@ function labelForLocation(location: Location) {
   }
 
   return text.includes('entrance') ? 'ENTRANCE' : 'EXIT';
+}
+
+function shapeForLocation(location: Location) {
+  const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+
+  if (text.includes('circle')) {
+    return 'circle';
+  }
+
+  if (text.includes('oblong')) {
+    return 'oblong';
+  }
+
+  if (text.includes('animal')) {
+    return 'animal';
+  }
+
+  return 'block';
 }
 
 function shopIndex(id: string) {

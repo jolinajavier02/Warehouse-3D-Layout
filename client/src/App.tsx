@@ -7,6 +7,8 @@ import { parseWorkbookLocationsFromBuffer } from './services/workbookLocations';
 import type { Location, LocationType } from './types/location';
 
 type Page = 'home' | 'data' | 'layout' | 'analytics';
+type ShapePresetId = 'square' | 'rectangle' | 'long-rectangle' | 'circle' | 'oblong' | 'animal-shape';
+type SignPresetId = 'entrance' | 'exit' | 'cr' | 'way';
 
 const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv-v3-plan-overlay';
 const uploadedNameStorageKey = 'warehouse-layout-uploaded-name-v3-plan-overlay';
@@ -25,6 +27,22 @@ const navItems: Array<{ id: Page; label: string; icon: string }> = [
 ];
 
 const editableLocationTypes: LocationType[] = ['Boundary', 'Layout Zone', 'Shop', 'Path', 'Gate'];
+
+const shapePresets: Array<{ id: ShapePresetId; label: string; width: number; depth: number; height: number; description: string }> = [
+  { id: 'square', label: 'Square', width: 8, depth: 8, height: 3.4, description: 'Shape: Square shop block' },
+  { id: 'rectangle', label: 'Rectangle', width: 11, depth: 7, height: 3.4, description: 'Shape: Rectangle shop block' },
+  { id: 'long-rectangle', label: 'Long Rectangle', width: 18, depth: 5, height: 3.4, description: 'Shape: Long rectangle shop block' },
+  { id: 'circle', label: 'Circle', width: 8, depth: 8, height: 3.4, description: 'Shape: Circle shop block' },
+  { id: 'oblong', label: 'Oblong', width: 14, depth: 6, height: 3.4, description: 'Shape: Oblong shop block' },
+  { id: 'animal-shape', label: 'Animal Shape', width: 10, depth: 8, height: 3.4, description: 'Shape: Animal shop block' }
+];
+
+const signPresets: Array<{ id: SignPresetId; label: string; name: string; description: string }> = [
+  { id: 'entrance', label: 'Entrance', name: 'Entrance', description: 'Warehouse entrance sign' },
+  { id: 'exit', label: 'Exit', name: 'Exit', description: 'Exit sign' },
+  { id: 'cr', label: 'CR', name: 'CR', description: 'Restroom CR bathroom sign' },
+  { id: 'way', label: 'Way', name: 'Way', description: 'Way sign for shop lane' }
+];
 
 export default function App() {
   const { locations: defaultLocations, loading, error } = useLocations();
@@ -141,6 +159,103 @@ export default function App() {
     });
   }
 
+  function handleAddLayoutShape(presetId: ShapePresetId) {
+    const preset = shapePresets.find((item) => item.id === presetId);
+
+    if (!preset) {
+      return;
+    }
+
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
+      const bounds = findAvailableShopBounds(source, preset.width, preset.depth);
+      const nextLocation: Location = {
+        id: uniqueLocationId(source, `${preset.id.replace(/-/g, '_')}_${nextShopNumber}`),
+        type: 'Shop',
+        name: `${preset.label} Shop ${nextShopNumber}`,
+        xMin: bounds.xMin,
+        yMin: bounds.yMin,
+        xMax: bounds.xMax,
+        yMax: bounds.yMax,
+        zMin: 0.14,
+        zMax: preset.height,
+        description: preset.description
+      };
+      const nextLocations = [...source, nextLocation];
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleAddLayoutSign(presetId: SignPresetId) {
+    const preset = signPresets.find((item) => item.id === presetId);
+
+    if (!preset) {
+      return;
+    }
+
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      const nextSignNumber = source.filter((location) => location.type === 'Gate').length + 1;
+      const bounds = findAvailableShopBounds(source, 2.4, 1.8);
+      const nextLocation: Location = {
+        id: uniqueLocationId(source, `${preset.id}_sign_${nextSignNumber}`),
+        type: 'Gate',
+        name: preset.name,
+        xMin: bounds.xMin,
+        yMin: bounds.yMin,
+        xMax: bounds.xMax,
+        yMax: bounds.yMax,
+        zMin: 0.14,
+        zMax: 1.8,
+        description: preset.description
+      };
+      const nextLocations = [...source, nextLocation];
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleAddCustomLayoutShape(width: number, depth: number, height: number) {
+    const safeWidth = Math.max(width, 1);
+    const safeDepth = Math.max(depth, 1);
+    const safeHeight = Math.max(height, 0.5);
+
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
+      const bounds = findAvailableShopBounds(source, safeWidth, safeDepth);
+      const nextLocation: Location = {
+        id: uniqueLocationId(source, `custom_shop_${nextShopNumber}`),
+        type: 'Shop',
+        name: `Custom Shop ${nextShopNumber}`,
+        xMin: bounds.xMin,
+        yMin: bounds.yMin,
+        xMax: bounds.xMax,
+        yMax: bounds.yMax,
+        zMin: 0.14,
+        zMax: safeHeight,
+        description: `Shape: Custom shop block ${safeWidth} x ${safeDepth} x ${safeHeight}`
+      };
+      const nextLocations = [...source, nextLocation];
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
   return (
     <div className="app-shell">
       <aside className="app-nav" aria-label="Primary navigation">
@@ -189,6 +304,9 @@ export default function App() {
             error={error}
             selection={selection}
             uploadedFileName={uploadedFileName}
+            onAddShape={handleAddLayoutShape}
+            onAddCustomShape={handleAddCustomLayoutShape}
+            onAddSign={handleAddLayoutSign}
           />
         )}
         {activePage === 'analytics' && <AnalyticsPage stats={stats} />}
@@ -390,17 +508,71 @@ function LayoutPage({
   loading,
   error,
   selection,
-  uploadedFileName
+  uploadedFileName,
+  onAddShape,
+  onAddCustomShape,
+  onAddSign
 }: {
   locations: Location[];
   loading: boolean;
   error: string | null;
   selection: ReturnType<typeof useMapSelection>;
   uploadedFileName: string | null;
+  onAddShape: (presetId: ShapePresetId) => void;
+  onAddCustomShape: (width: number, depth: number, height: number) => void;
+  onAddSign: (presetId: SignPresetId) => void;
 }) {
+  const [customWidth, setCustomWidth] = useState(9);
+  const [customDepth, setCustomDepth] = useState(6);
+  const [customHeight, setCustomHeight] = useState(3.4);
+
   return (
     <section className="layout-map-stage" aria-label="Layout Strategy">
       <div className="layout-source-pill">{uploadedFileName ? `Using uploaded data: ${uploadedFileName}` : 'Using default CSV data'}</div>
+      <aside className="layout-tools" aria-label="Layout creation tools">
+        <section>
+          <h2>Shapes</h2>
+          <div className="tool-button-grid">
+            {shapePresets.map((preset) => (
+              <button key={preset.id} type="button" onClick={() => onAddShape(preset.id)}>
+                <span className={`shape-icon shape-${preset.id}`} aria-hidden="true" />
+                <span>{preset.label}</span>
+                <small>
+                  {preset.width} x {preset.depth}
+                </small>
+              </button>
+            ))}
+          </div>
+          <div className="custom-size-tool">
+            <label>
+              W
+              <input type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(numberInputValue(event.target.value))} />
+            </label>
+            <label>
+              D
+              <input type="number" min="1" value={customDepth} onChange={(event) => setCustomDepth(numberInputValue(event.target.value))} />
+            </label>
+            <label>
+              H
+              <input type="number" min="0.5" step="0.1" value={customHeight} onChange={(event) => setCustomHeight(numberInputValue(event.target.value))} />
+            </label>
+            <button type="button" onClick={() => onAddCustomShape(customWidth, customDepth, customHeight)}>
+              Add Custom
+            </button>
+          </div>
+        </section>
+        <section>
+          <h2>Signs</h2>
+          <div className="tool-button-grid sign-grid">
+            {signPresets.map((preset) => (
+              <button key={preset.id} type="button" onClick={() => onAddSign(preset.id)}>
+                <span className={`sign-icon sign-${preset.id}`}>{preset.label.slice(0, 2).toUpperCase()}</span>
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </aside>
       <MapContainer
         locations={locations}
         selectedLocationId={selection.selectedLocationId}
