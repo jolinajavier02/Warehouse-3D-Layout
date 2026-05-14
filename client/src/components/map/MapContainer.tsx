@@ -8,6 +8,7 @@ interface MapContainerProps {
   searchedLocationIds: string[];
   onHoverLocation: (locationId: string | null) => void;
   onSelectLocation: (locationId: string) => void;
+  staticView?: boolean;
 }
 
 export default function MapContainer({
@@ -16,7 +17,8 @@ export default function MapContainer({
   selectedLocationId,
   searchedLocationIds,
   onHoverLocation,
-  onSelectLocation
+  onSelectLocation,
+  staticView = false
 }: MapContainerProps) {
   const activeLocation =
     locations.find((location) => location.id === hoveredLocationId) ??
@@ -32,6 +34,7 @@ export default function MapContainer({
         searchedLocationIds={searchedLocationIds}
         onHoverLocation={onHoverLocation}
         onSelectLocation={onSelectLocation}
+        staticView={staticView}
       />
       {activeLocation && activeLocation.type === 'Shop' && (
         <aside className="map-hover-card" aria-live="polite">
@@ -43,7 +46,7 @@ export default function MapContainer({
           </small>
         </aside>
       )}
-      <p className="map-hint">Pinch or scroll to zoom and drag to rotate</p>
+      <p className="map-hint">{staticView ? 'Click a block to select it' : 'Pinch or scroll to zoom and drag to rotate'}</p>
     </section>
   );
 }

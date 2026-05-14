@@ -93,6 +93,14 @@ function createLocationGeometry(location: Location, width: number, height: numbe
     if (shape === 'animal') {
       return createExtrudedFootprint(createAnimalShape(width, depth), height);
     }
+
+    if (shape === 'tree') {
+      return new THREE.ConeGeometry(Math.max(width, depth) / 2, height, 24);
+    }
+
+    if (shape === 'person') {
+      return new THREE.CapsuleGeometry(Math.min(width, depth) / 2, Math.max(height - Math.min(width, depth), 0.4), 8, 18);
+    }
   }
 
   return new THREE.BoxGeometry(width, height, depth);
@@ -163,6 +171,11 @@ export function buildLocationGroup(locations: Location[]) {
     const mesh = createLocationMesh(location);
     group.add(mesh);
 
+    const decorationDetails = createDecorationDetails(location);
+    if (decorationDetails) {
+      group.add(decorationDetails);
+    }
+
     if (location.type === 'Shop' || location.type === 'Gate') {
       group.add(createLocationEdges(location));
     }
@@ -179,13 +192,123 @@ export function buildLocationGroup(locations: Location[]) {
   return group;
 }
 
+function createDecorationDetails(location: Location) {
+  if (location.type !== 'Shop') {
+    return null;
+  }
+
+  const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+  const bounds = normalizedBounds(location);
+  const width = Math.max(bounds.xMax - bounds.xMin, 0.1);
+  const depth = Math.max(bounds.yMax - bounds.yMin, 0.1);
+  const height = Math.max(bounds.zMax - bounds.zMin, 0.1);
+  const centerX = bounds.xMin + width / 2;
+  const centerZ = bounds.yMin + depth / 2;
+
+  if (text.includes('tree')) {
+    return createTreeDecoration(centerX, bounds.zMin, centerZ, width, height);
+  }
+
+  if (text.includes('person walking') || text.includes('person standing')) {
+    return createPersonDecoration(centerX, bounds.zMin, centerZ, width, height, text.includes('walking'));
+  }
+
+  if (text.includes('animal character')) {
+    return createAnimalDecoration(centerX, bounds.zMin, centerZ, width, depth, height);
+  }
+
+  return null;
+}
+
+function createTreeDecoration(x: number, baseY: number, z: number, width: number, height: number) {
+  const group = new THREE.Group();
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#8b5a2b', roughness: 0.7 });
+  const leafMaterial = new THREE.MeshStandardMaterial({ color: '#16a34a', roughness: 0.75 });
+  const trunkHeight = height * 0.42;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(width * 0.12, width * 0.15, trunkHeight, 12), trunkMaterial);
+  const crown = new THREE.Mesh(new THREE.ConeGeometry(width * 0.58, height * 0.76, 28), leafMaterial);
+
+  trunk.position.set(x, baseY + trunkHeight / 2, z);
+  crown.position.set(x, baseY + trunkHeight + height * 0.32, z);
+  crown.castShadow = true;
+  trunk.castShadow = true;
+  group.add(trunk, crown);
+
+  return group;
+}
+
+function createPersonDecoration(x: number, baseY: number, z: number, width: number, height: number, walking: boolean) {
+  const group = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: '#f2c6a0', roughness: 0.58 });
+  const shirt = new THREE.MeshStandardMaterial({ color: walking ? '#0ea5e9' : '#6366f1', roughness: 0.6 });
+  const pants = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.65 });
+  const radius = Math.max(width * 0.18, 0.18);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.9, 18, 12), skin);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(radius * 0.95, height * 0.28, 8, 14), shirt);
+  const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.28, radius * 0.3, height * 0.28, 10), pants);
+  const rightLeg = leftLeg.clone();
+  const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.2, radius * 0.22, height * 0.24, 10), skin);
+  const rightArm = leftArm.clone();
+
+  head.position.set(x, baseY + height * 0.82, z);
+  body.position.set(x, baseY + height * 0.52, z);
+  leftLeg.position.set(x - radius * 0.42, baseY + height * 0.18, z + (walking ? radius * 0.45 : 0));
+  rightLeg.position.set(x + radius * 0.42, baseY + height * 0.18, z - (walking ? radius * 0.45 : 0));
+  leftArm.position.set(x - radius * 1.08, baseY + height * 0.52, z - (walking ? radius * 0.34 : 0));
+  rightArm.position.set(x + radius * 1.08, baseY + height * 0.52, z + (walking ? radius * 0.34 : 0));
+  leftArm.rotation.z = walking ? -0.45 : -0.18;
+  rightArm.rotation.z = walking ? 0.45 : 0.18;
+  leftLeg.rotation.x = walking ? -0.32 : 0;
+  rightLeg.rotation.x = walking ? 0.32 : 0;
+  group.add(head, body, leftLeg, rightLeg, leftArm, rightArm);
+  group.traverse((object) => {
+    object.castShadow = true;
+  });
+
+  return group;
+}
+
+function createAnimalDecoration(x: number, baseY: number, z: number, width: number, depth: number, height: number) {
+  const group = new THREE.Group();
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.68 });
+  const darkMaterial = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.7 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(Math.max(width, depth) * 0.26, 22, 14), bodyMaterial);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(Math.max(width, depth) * 0.17, 18, 12), bodyMaterial);
+  const leftEar = new THREE.Mesh(new THREE.ConeGeometry(width * 0.08, height * 0.22, 12), darkMaterial);
+  const rightEar = leftEar.clone();
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(width * 0.07, width * 0.32, 12), darkMaterial);
+
+  body.scale.z = Math.max(depth / width, 0.72);
+  body.position.set(x, baseY + height * 0.46, z);
+  head.position.set(x, baseY + height * 0.66, z - depth * 0.26);
+  leftEar.position.set(x - width * 0.11, baseY + height * 0.86, z - depth * 0.29);
+  rightEar.position.set(x + width * 0.11, baseY + height * 0.86, z - depth * 0.29);
+  tail.position.set(x, baseY + height * 0.55, z + depth * 0.34);
+  tail.rotation.x = Math.PI / 2;
+  group.add(body, head, leftEar, rightEar, tail);
+
+  for (const offsetX of [-0.18, 0.18]) {
+    for (const offsetZ of [-0.1, 0.16]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(width * 0.045, width * 0.05, height * 0.28, 10), darkMaterial);
+      leg.position.set(x + width * offsetX, baseY + height * 0.16, z + depth * offsetZ);
+      group.add(leg);
+    }
+  }
+
+  group.traverse((object) => {
+    object.castShadow = true;
+  });
+
+  return group;
+}
+
 function createPlanGrid(bounds: ReturnType<typeof getPlanBounds> & {}) {
   const group = new THREE.Group();
   const material = new THREE.LineBasicMaterial({
     color: '#d8dee6',
     transparent: true,
     opacity: 0.55,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
     fog: false
   });
@@ -306,9 +429,12 @@ function createFlatStrip(x1: number, y1: number, x2: number, y2: number, color: 
   const geometry = new THREE.BoxGeometry(length, 0.025, thickness);
   const material = new THREE.MeshBasicMaterial({
     color,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
-    fog: false
+    fog: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
   });
   const mesh = new THREE.Mesh(geometry, material);
 
@@ -351,7 +477,7 @@ function createDimensionLabel(label: string, x: number, y: number, color: string
   const material = new THREE.SpriteMaterial({
     map: texture,
     transparent: true,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false
   });
   const sprite = new THREE.Sprite(material);
@@ -487,6 +613,12 @@ function formatMeters(value: number) {
 }
 
 function colorForLocation(location: Location) {
+  const assignedColor = colorFromDescription(location.description);
+
+  if (assignedColor) {
+    return assignedColor;
+  }
+
   if (location.type === 'Boundary') {
     return '#9aa3a6';
   }
@@ -496,6 +628,12 @@ function colorForLocation(location: Location) {
   }
 
   if (location.type === 'Shop') {
+    const decorationColor = decorationColorForLocation(location);
+
+    if (decorationColor) {
+      return decorationColor;
+    }
+
     return '#d3d8dc';
   }
 
@@ -508,6 +646,18 @@ function colorForLocation(location: Location) {
 
     if (label === 'CR') {
       return '#1d4ed8';
+    }
+
+    if (label === 'FIRE' || label === 'FE') {
+      return '#dc2626';
+    }
+
+    if (label === 'GATE') {
+      return '#7c3aed';
+    }
+
+    if (label === 'WAY') {
+      return '#0f766e';
     }
 
     return label === 'ENTRANCE' ? '#059669' : '#2563eb';
@@ -534,7 +684,36 @@ function labelForLocation(location: Location) {
     return 'CR';
   }
 
+  if (text.includes('fire extinguisher')) {
+    return 'FE';
+  }
+
+  if (text.includes('fire exit')) {
+    return 'FIRE';
+  }
+
+  if (text.includes('gate')) {
+    return 'GATE';
+  }
+
+  if (text.includes('partition')) {
+    return 'PART';
+  }
+
+  if (text.includes('gap')) {
+    return 'GAP';
+  }
+
+  if (text.includes('way')) {
+    return 'WAY';
+  }
+
   return text.includes('entrance') ? 'ENTRANCE' : 'EXIT';
+}
+
+function colorFromDescription(description?: string) {
+  const match = description?.match(/(?:^|;)\s*Color:\s*(#[0-9a-f]{6})/i);
+  return match?.[1] ?? null;
 }
 
 function shapeForLocation(location: Location) {
@@ -552,7 +731,41 @@ function shapeForLocation(location: Location) {
     return 'animal';
   }
 
+  if (text.includes('tree')) {
+    return 'tree';
+  }
+
+  if (text.includes('person walking') || text.includes('person standing')) {
+    return 'person';
+  }
+
   return 'block';
+}
+
+function decorationColorForLocation(location: Location) {
+  const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+
+  if (text.includes('tree')) {
+    return '#22c55e';
+  }
+
+  if (text.includes('person walking')) {
+    return '#0ea5e9';
+  }
+
+  if (text.includes('person standing')) {
+    return '#6366f1';
+  }
+
+  if (text.includes('animal character') || text.includes('animal block')) {
+    return '#f59e0b';
+  }
+
+  if (text.includes('chair')) {
+    return '#64748b';
+  }
+
+  return null;
 }
 
 function shopIndex(id: string) {

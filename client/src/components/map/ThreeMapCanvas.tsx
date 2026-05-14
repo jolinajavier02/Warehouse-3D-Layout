@@ -14,6 +14,7 @@ interface ThreeMapCanvasProps {
   searchedLocationIds: string[];
   onHoverLocation: (locationId: string | null) => void;
   onSelectLocation: (locationId: string) => void;
+  staticView?: boolean;
 }
 
 export default function ThreeMapCanvas({
@@ -22,7 +23,8 @@ export default function ThreeMapCanvas({
   selectedLocationId,
   searchedLocationIds,
   onHoverLocation,
-  onSelectLocation
+  onSelectLocation,
+  staticView = false
 }: ThreeMapCanvasProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -71,6 +73,8 @@ export default function ThreeMapCanvas({
     controls.target.set(46, 0, 29);
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.enablePan = false;
+    controls.enableRotate = !staticView;
+    controls.enableZoom = !staticView;
     controls.minZoom = 0.75;
     controls.maxZoom = 2.4;
     controlsRef.current = controls;
@@ -149,7 +153,7 @@ export default function ThreeMapCanvas({
       groupRef.current = null;
       meshesRef.current = [];
     };
-  }, [onHoverLocation, onSelectLocation]);
+  }, [onHoverLocation, onSelectLocation, staticView]);
 
   useEffect(() => {
     const scene = sceneRef.current;

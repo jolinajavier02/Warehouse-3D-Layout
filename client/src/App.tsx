@@ -6,9 +6,11 @@ import { parseLocationsCsv } from './services/csvLocations';
 import { parseWorkbookLocationsFromBuffer } from './services/workbookLocations';
 import type { Location, LocationType } from './types/location';
 
-type Page = 'home' | 'data' | 'layout' | 'analytics';
+type Page = 'home' | 'data' | 'layout' | 'builder' | 'analytics';
 type ShapePresetId = 'square' | 'rectangle' | 'long-rectangle' | 'circle' | 'oblong' | 'animal-shape';
-type SignPresetId = 'entrance' | 'exit' | 'cr' | 'way';
+type SignPresetId = 'entrance' | 'exit' | 'cr' | 'fire-exit' | 'fire-extinguisher' | 'gate' | 'way' | 'partition' | 'gap';
+type DecorationPresetId = 'animal-character' | 'tree' | 'person-walking' | 'person-standing' | 'chair-setup';
+type BuilderTool = 'shapes' | 'signs' | 'label' | 'color' | 'decorations' | 'delete';
 
 const uploadedCsvStorageKey = 'warehouse-layout-uploaded-csv-v3-plan-overlay';
 const uploadedNameStorageKey = 'warehouse-layout-uploaded-name-v3-plan-overlay';
@@ -40,8 +42,29 @@ const shapePresets: Array<{ id: ShapePresetId; label: string; width: number; dep
 const signPresets: Array<{ id: SignPresetId; label: string; name: string; description: string }> = [
   { id: 'entrance', label: 'Entrance', name: 'Entrance', description: 'Warehouse entrance sign' },
   { id: 'exit', label: 'Exit', name: 'Exit', description: 'Exit sign' },
+  { id: 'fire-exit', label: 'Fire Exit', name: 'Fire Exit', description: 'Fire exit sign' },
+  { id: 'fire-extinguisher', label: 'Fire Extinguisher', name: 'Fire Extinguisher', description: 'Fire extinguisher sign' },
   { id: 'cr', label: 'CR', name: 'CR', description: 'Restroom CR bathroom sign' },
-  { id: 'way', label: 'Way', name: 'Way', description: 'Way sign for shop lane' }
+  { id: 'gate', label: 'Gate', name: 'Gate', description: 'Gate sign' },
+  { id: 'way', label: 'Way', name: 'Way', description: 'Way sign for shop lane' },
+  { id: 'partition', label: 'Partition', name: 'Partition', description: 'Partition sign' },
+  { id: 'gap', label: 'Gap', name: 'Gap', description: 'Gap sign' }
+];
+
+const decorationPresets: Array<{ id: DecorationPresetId; label: string; width: number; depth: number; height: number; description: string }> = [
+  { id: 'animal-character', label: 'Animal Character', width: 5, depth: 4, height: 2.8, description: 'Decoration: Animal character Shape: Animal' },
+  { id: 'tree', label: 'Tree', width: 3, depth: 3, height: 4.2, description: 'Decoration: Tree' },
+  { id: 'person-walking', label: 'Person Walking', width: 2.2, depth: 1.4, height: 3.2, description: 'Decoration: Person walking' },
+  { id: 'person-standing', label: 'Person Standing', width: 1.6, depth: 1.6, height: 3.2, description: 'Decoration: Person standing' },
+  { id: 'chair-setup', label: 'Chair Setup', width: 5, depth: 4, height: 1.2, description: 'Decoration: Chair setup' }
+];
+
+const colorTargets = [
+  { label: 'Selected', value: 'selected' },
+  { label: 'Blocks', value: 'blocks' },
+  { label: 'Lines', value: 'lines' },
+  { label: 'Boundary', value: 'boundary' },
+  { label: 'Surface', value: 'surface' }
 ];
 
 export default function App() {
@@ -50,6 +73,7 @@ export default function App() {
   const [uploadedLocations, setUploadedLocations] = useState<Location[] | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [layoutHistory, setLayoutHistory] = useState<Location[][]>([]);
   const locations = uploadedLocations ?? defaultLocations;
   const selection = useMapSelection(locations);
   const stats = useMemo(() => buildStats(locations), [locations]);
@@ -136,7 +160,7 @@ export default function App() {
         zMax: 3.4,
         description: 'New uploaded shop'
       };
-      const nextLocations = [...source, nextLocation];
+      const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
       persistLocations(nextLocations, nextFileName);
@@ -168,6 +192,7 @@ export default function App() {
 
     setUploadedLocations((current) => {
       const source = current ?? locations;
+      setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
       const bounds = findAvailableShopBounds(source, preset.width, preset.depth);
       const nextLocation: Location = {
@@ -182,7 +207,7 @@ export default function App() {
         zMax: preset.height,
         description: preset.description
       };
-      const nextLocations = [...source, nextLocation];
+      const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
       persistLocations(nextLocations, nextFileName);
@@ -201,6 +226,7 @@ export default function App() {
 
     setUploadedLocations((current) => {
       const source = current ?? locations;
+      setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextSignNumber = source.filter((location) => location.type === 'Gate').length + 1;
       const bounds = findAvailableShopBounds(source, 2.4, 1.8);
       const nextLocation: Location = {
@@ -215,7 +241,7 @@ export default function App() {
         zMax: 1.8,
         description: preset.description
       };
-      const nextLocations = [...source, nextLocation];
+      const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
       persistLocations(nextLocations, nextFileName);
@@ -232,6 +258,7 @@ export default function App() {
 
     setUploadedLocations((current) => {
       const source = current ?? locations;
+      setLayoutHistory((history) => [source, ...history].slice(0, 30));
       const nextShopNumber = source.filter((location) => location.type === 'Shop').length + 1;
       const bounds = findAvailableShopBounds(source, safeWidth, safeDepth);
       const nextLocation: Location = {
@@ -246,9 +273,113 @@ export default function App() {
         zMax: safeHeight,
         description: `Shape: Custom shop block ${safeWidth} x ${safeDepth} x ${safeHeight}`
       };
-      const nextLocations = [...source, nextLocation];
+      const nextLocations = appendLayoutItem(source, nextLocation);
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleApplyCustomContainer(type: 'Boundary' | 'Layout Zone', width: number, depth: number) {
+    const safeWidth = Math.max(width, 2);
+    const safeDepth = Math.max(depth, 2);
+
+    updateLayoutWithHistory((source) => upsertPlanContainer(source, type, safeWidth, safeDepth));
+  }
+
+  function handleAddDecoration(presetId: DecorationPresetId) {
+    const preset = decorationPresets.find((item) => item.id === presetId);
+
+    if (!preset) {
+      return;
+    }
+
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      setLayoutHistory((history) => [source, ...history].slice(0, 30));
+      const nextDecorationNumber = source.filter((location) => location.description?.includes('Decoration:')).length + 1;
+      const bounds = findAvailableShopBounds(source, preset.width, preset.depth);
+      const nextLocation: Location = {
+        id: uniqueLocationId(source, `${preset.id.replace(/-/g, '_')}_${nextDecorationNumber}`),
+        type: 'Shop',
+        name: `${preset.label} ${nextDecorationNumber}`,
+        xMin: bounds.xMin,
+        yMin: bounds.yMin,
+        xMax: bounds.xMax,
+        yMax: bounds.yMax,
+        zMin: 0.14,
+        zMax: preset.height,
+        description: preset.description
+      };
+      const nextLocations = appendLayoutItem(source, nextLocation);
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      persistLocations(nextLocations, nextFileName);
+      setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+
+      return nextLocations;
+    });
+  }
+
+  function handleApplyLabel(locationId: string | null, label: string) {
+    if (!locationId || label.trim().length === 0) {
+      return;
+    }
+
+    updateLayoutWithHistory((source) => source.map((location) => (location.id === locationId ? { ...location, name: label.trim() } : location)));
+  }
+
+  function handleApplyColor(target: string, color: string) {
+    updateLayoutWithHistory((source) =>
+      source.map((location) => {
+        const shouldApply =
+          (target === 'selected' && location.id === selection.selectedLocationId) ||
+          (target === 'blocks' && location.type === 'Shop') ||
+          (target === 'lines' && location.type === 'Path') ||
+          (target === 'boundary' && location.type === 'Boundary') ||
+          (target === 'surface' && location.type === 'Layout Zone');
+
+        return shouldApply ? { ...location, description: withDescriptionMeta(location.description, 'Color', color) } : location;
+      })
+    );
+  }
+
+  function handleDeleteSelectedBlock() {
+    const locationId = selection.selectedLocationId;
+
+    if (!locationId) {
+      return;
+    }
+
+    updateLayoutWithHistory((source) => source.filter((location) => location.id !== locationId));
+    selection.setSelectedLocationId(null);
+    selection.setHoveredLocationId(null);
+  }
+
+  function handleUndoLayoutChange() {
+    const [previous, ...rest] = layoutHistory;
+
+    if (!previous) {
+      return;
+    }
+
+    const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+    setUploadedLocations(previous);
+    persistLocations(previous, nextFileName);
+    setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
+    setLayoutHistory(rest);
+  }
+
+  function updateLayoutWithHistory(updater: (source: Location[]) => Location[]) {
+    setUploadedLocations((current) => {
+      const source = current ?? locations;
+      const nextLocations = updater(source);
+      const nextFileName = uploadedFileName ?? 'edited-layout.csv';
+
+      setLayoutHistory((history) => [source, ...history].slice(0, 30));
       persistLocations(nextLocations, nextFileName);
       setUploadedFileName((currentName) => currentName ?? 'edited-layout.csv');
 
@@ -265,7 +396,7 @@ export default function App() {
         <nav className="nav-items">
           {navItems.map((item) => (
             <button
-              className={activePage === item.id ? 'active' : ''}
+              className={activePage === item.id || (activePage === 'builder' && item.id === 'layout') ? 'active' : ''}
               key={item.id}
               type="button"
               onClick={() => setActivePage(item.id)}
@@ -304,9 +435,26 @@ export default function App() {
             error={error}
             selection={selection}
             uploadedFileName={uploadedFileName}
+            onOpenBuilder={() => setActivePage('builder')}
+          />
+        )}
+        {activePage === 'builder' && (
+          <LayoutBuilderPage
+            locations={locations}
+            loading={loading}
+            error={error}
+            selection={selection}
+            canUndo={layoutHistory.length > 0}
             onAddShape={handleAddLayoutShape}
             onAddCustomShape={handleAddCustomLayoutShape}
+            onApplyCustomContainer={handleApplyCustomContainer}
             onAddSign={handleAddLayoutSign}
+            onAddDecoration={handleAddDecoration}
+            onApplyLabel={handleApplyLabel}
+            onApplyColor={handleApplyColor}
+            onDeleteSelected={handleDeleteSelectedBlock}
+            onUndo={handleUndoLayoutChange}
+            onSave={() => setActivePage('layout')}
           />
         )}
         {activePage === 'analytics' && <AnalyticsPage stats={stats} />}
@@ -509,70 +657,21 @@ function LayoutPage({
   error,
   selection,
   uploadedFileName,
-  onAddShape,
-  onAddCustomShape,
-  onAddSign
+  onOpenBuilder
 }: {
   locations: Location[];
   loading: boolean;
   error: string | null;
   selection: ReturnType<typeof useMapSelection>;
   uploadedFileName: string | null;
-  onAddShape: (presetId: ShapePresetId) => void;
-  onAddCustomShape: (width: number, depth: number, height: number) => void;
-  onAddSign: (presetId: SignPresetId) => void;
+  onOpenBuilder: () => void;
 }) {
-  const [customWidth, setCustomWidth] = useState(9);
-  const [customDepth, setCustomDepth] = useState(6);
-  const [customHeight, setCustomHeight] = useState(3.4);
-
   return (
     <section className="layout-map-stage" aria-label="Layout Strategy">
       <div className="layout-source-pill">{uploadedFileName ? `Using uploaded data: ${uploadedFileName}` : 'Using default CSV data'}</div>
-      <aside className="layout-tools" aria-label="Layout creation tools">
-        <section>
-          <h2>Shapes</h2>
-          <div className="tool-button-grid">
-            {shapePresets.map((preset) => (
-              <button key={preset.id} type="button" onClick={() => onAddShape(preset.id)}>
-                <span className={`shape-icon shape-${preset.id}`} aria-hidden="true" />
-                <span>{preset.label}</span>
-                <small>
-                  {preset.width} x {preset.depth}
-                </small>
-              </button>
-            ))}
-          </div>
-          <div className="custom-size-tool">
-            <label>
-              W
-              <input type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(numberInputValue(event.target.value))} />
-            </label>
-            <label>
-              D
-              <input type="number" min="1" value={customDepth} onChange={(event) => setCustomDepth(numberInputValue(event.target.value))} />
-            </label>
-            <label>
-              H
-              <input type="number" min="0.5" step="0.1" value={customHeight} onChange={(event) => setCustomHeight(numberInputValue(event.target.value))} />
-            </label>
-            <button type="button" onClick={() => onAddCustomShape(customWidth, customDepth, customHeight)}>
-              Add Custom
-            </button>
-          </div>
-        </section>
-        <section>
-          <h2>Signs</h2>
-          <div className="tool-button-grid sign-grid">
-            {signPresets.map((preset) => (
-              <button key={preset.id} type="button" onClick={() => onAddSign(preset.id)}>
-                <span className={`sign-icon sign-${preset.id}`}>{preset.label.slice(0, 2).toUpperCase()}</span>
-                <span>{preset.label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      </aside>
+      <button className="add-layout-button" type="button" onClick={onOpenBuilder}>
+        + Add Layout
+      </button>
       <MapContainer
         locations={locations}
         selectedLocationId={selection.selectedLocationId}
@@ -583,6 +682,206 @@ function LayoutPage({
       />
       {loading && <div className="map-status">Loading layout...</div>}
       {error && <div className="map-status map-status-error">{error}</div>}
+    </section>
+  );
+}
+
+function LayoutBuilderPage({
+  locations,
+  loading,
+  error,
+  selection,
+  canUndo,
+  onAddShape,
+  onAddCustomShape,
+  onApplyCustomContainer,
+  onAddSign,
+  onAddDecoration,
+  onApplyLabel,
+  onApplyColor,
+  onDeleteSelected,
+  onUndo,
+  onSave
+}: {
+  locations: Location[];
+  loading: boolean;
+  error: string | null;
+  selection: ReturnType<typeof useMapSelection>;
+  canUndo: boolean;
+  onAddShape: (presetId: ShapePresetId) => void;
+  onAddCustomShape: (width: number, depth: number, height: number) => void;
+  onApplyCustomContainer: (type: 'Boundary' | 'Layout Zone', width: number, depth: number) => void;
+  onAddSign: (presetId: SignPresetId) => void;
+  onAddDecoration: (presetId: DecorationPresetId) => void;
+  onApplyLabel: (locationId: string | null, label: string) => void;
+  onApplyColor: (target: string, color: string) => void;
+  onDeleteSelected: () => void;
+  onUndo: () => void;
+  onSave: () => void;
+}) {
+  const [activeTool, setActiveTool] = useState<BuilderTool>('shapes');
+  const [customWidth, setCustomWidth] = useState(9);
+  const [customDepth, setCustomDepth] = useState(6);
+  const [customHeight, setCustomHeight] = useState(3.4);
+  const [labelText, setLabelText] = useState('');
+  const [colorTarget, setColorTarget] = useState('selected');
+  const [colorValue, setColorValue] = useState('#2563eb');
+  const selectedLocation = locations.find((location) => location.id === selection.selectedLocationId) ?? null;
+
+  return (
+    <section className="layout-builder-page" aria-label="Add Layout">
+      <header className="builder-header">
+        <div>
+          <h2>Add Layout</h2>
+          <p>{selectedLocation ? `Selected: ${selectedLocation.name}` : 'Select a block to edit label, color, or delete.'}</p>
+        </div>
+        <div className="builder-actions">
+          <button type="button" onClick={onUndo} disabled={!canUndo}>
+            Undo
+          </button>
+          <button className="primary-save" type="button" onClick={onSave}>
+            Save
+          </button>
+        </div>
+      </header>
+      <div className="builder-map">
+        <MapContainer
+          locations={locations}
+          selectedLocationId={selection.selectedLocationId}
+          hoveredLocationId={selection.hoveredLocationId}
+          searchedLocationIds={[]}
+          onHoverLocation={selection.setHoveredLocationId}
+          onSelectLocation={selection.setSelectedLocationId}
+          staticView
+        />
+        {activeTool === 'delete' && selectedLocation && (
+          <button className="map-delete-fab" type="button" onClick={onDeleteSelected} aria-label={`Delete ${selectedLocation.name}`}>
+            ×
+          </button>
+        )}
+        {loading && <div className="map-status">Loading layout...</div>}
+        {error && <div className="map-status map-status-error">{error}</div>}
+      </div>
+      <section className="builder-toolbar" aria-label="Builder tools">
+        <div className="builder-tabs">
+          {(['shapes', 'signs', 'label', 'color', 'decorations', 'delete'] as BuilderTool[]).map((tool) => (
+            <button className={activeTool === tool ? 'active' : ''} key={tool} type="button" onClick={() => setActiveTool(tool)}>
+              {tool}
+            </button>
+          ))}
+        </div>
+        <div className="builder-panel">
+          {activeTool === 'shapes' && (
+            <>
+              <h3>Shapes</h3>
+              <p>Pick a shape and it will be placed in an open area with spacing.</p>
+              <div className="tool-button-grid wide-tools">
+                {shapePresets.map((preset) => (
+                  <button key={preset.id} type="button" onClick={() => onAddShape(preset.id)}>
+                    <span className={`shape-icon shape-${preset.id}`} aria-hidden="true" />
+                    <span>{preset.label}</span>
+                    <small>
+                      {preset.width} x {preset.depth}
+                    </small>
+                  </button>
+                ))}
+              </div>
+              <div className="custom-size-tool">
+                <label>
+                  W
+                  <input type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(numberInputValue(event.target.value))} />
+                </label>
+                <label>
+                  D
+                  <input type="number" min="1" value={customDepth} onChange={(event) => setCustomDepth(numberInputValue(event.target.value))} />
+                </label>
+                <label>
+                  H
+                  <input type="number" min="0.5" step="0.1" value={customHeight} onChange={(event) => setCustomHeight(numberInputValue(event.target.value))} />
+                </label>
+                <button type="button" onClick={() => onAddCustomShape(customWidth, customDepth, customHeight)}>
+                  Add Custom
+                </button>
+                <button type="button" onClick={() => onApplyCustomContainer('Boundary', customWidth, customDepth)}>
+                  Set Boundary
+                </button>
+                <button type="button" onClick={() => onApplyCustomContainer('Layout Zone', customWidth, customDepth)}>
+                  Set Surface
+                </button>
+              </div>
+            </>
+          )}
+          {activeTool === 'signs' && (
+            <>
+              <h3>Signs</h3>
+              <div className="tool-button-grid wide-tools sign-grid">
+                {signPresets.map((preset) => (
+                  <button key={preset.id} type="button" onClick={() => onAddSign(preset.id)}>
+                    <span className={`sign-icon sign-${preset.id}`}>{preset.label.slice(0, 2).toUpperCase()}</span>
+                    <span>{preset.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {activeTool === 'label' && (
+            <>
+              <h3>Label</h3>
+              <div className="builder-inline-form">
+                <input placeholder="Block label" value={labelText} onChange={(event) => setLabelText(event.target.value)} />
+                <button type="button" onClick={() => onApplyLabel(selection.selectedLocationId, labelText)}>
+                  Apply Label
+                </button>
+              </div>
+            </>
+          )}
+          {activeTool === 'color' && (
+            <>
+              <h3>Color</h3>
+              <div className="builder-inline-form">
+                <select value={colorTarget} onChange={(event) => setColorTarget(event.target.value)}>
+                  {colorTargets.map((target) => (
+                    <option key={target.value} value={target.value}>
+                      {target.label}
+                    </option>
+                  ))}
+                </select>
+                <input type="color" value={colorValue} onChange={(event) => setColorValue(event.target.value)} />
+                <button type="button" onClick={() => onApplyColor(colorTarget, colorValue)}>
+                  Apply Color
+                </button>
+              </div>
+            </>
+          )}
+          {activeTool === 'decorations' && (
+            <>
+              <h3>Decorations</h3>
+              <div className="tool-button-grid wide-tools">
+                {decorationPresets.map((preset) => (
+                  <button key={preset.id} type="button" onClick={() => onAddDecoration(preset.id)}>
+                    <span className={`shape-icon decoration-${preset.id}`} aria-hidden="true" />
+                    <span>{preset.label}</span>
+                    <small>
+                      {preset.width} x {preset.depth}
+                    </small>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {activeTool === 'delete' && (
+            <>
+              <h3>Delete Block</h3>
+              <div className="builder-inline-form">
+                <span>{selectedLocation ? selectedLocation.name : 'Click a block on the map first.'}</span>
+                <button className="danger-action" type="button" disabled={!selectedLocation} onClick={onDeleteSelected}>
+                  Delete Selected
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
     </section>
   );
 }
@@ -638,6 +937,98 @@ function uniqueLocationId(locations: Location[], preferredId: string) {
   }
 
   return `${preferredId}_${suffix}`;
+}
+
+function appendLayoutItem(locations: Location[], item: Location) {
+  const itemBounds = normalizedBounds2d(item);
+  const hasBoundary = locations.some((location) => location.type === 'Boundary');
+  const hasSurface = locations.some((location) => location.type === 'Layout Zone');
+  const seededLocations = [
+    ...(!hasBoundary ? [createPlanContainer('boundary_auto', 'Boundary', itemBounds)] : []),
+    ...(!hasSurface ? [createPlanContainer('surface_auto', 'Layout Zone', itemBounds)] : []),
+    ...locations,
+    item
+  ];
+
+  return expandPlanForItem(seededLocations, item);
+}
+
+function createPlanContainer(id: string, type: 'Boundary' | 'Layout Zone', bounds: ReturnType<typeof normalizedBounds2d>): Location {
+  return {
+    id,
+    type,
+    name: type === 'Boundary' ? 'Boundary' : 'Surface',
+    xMin: bounds.xMin - 4,
+    yMin: bounds.yMin - 4,
+    xMax: bounds.xMax + 4,
+    yMax: bounds.yMax + 4,
+    zMin: 0,
+    zMax: type === 'Boundary' ? 0.18 : 0.1,
+    description: type === 'Boundary' ? 'Auto-expanded boundary' : 'Auto-expanded surface'
+  };
+}
+
+function upsertPlanContainer(locations: Location[], type: 'Boundary' | 'Layout Zone', width: number, depth: number) {
+  const existing = locations.find((location) => location.type === type);
+  const allBounds = locations.length > 0 ? boundsForLocations(locations) : null;
+  const centerX = existing
+    ? (existing.xMin + existing.xMax) / 2
+    : allBounds
+      ? (allBounds.xMin + allBounds.xMax) / 2
+      : width / 2;
+  const centerY = existing
+    ? (existing.yMin + existing.yMax) / 2
+    : allBounds
+      ? (allBounds.yMin + allBounds.yMax) / 2
+      : depth / 2;
+  const nextContainer: Location = {
+    id: existing?.id ?? (type === 'Boundary' ? 'boundary_custom' : 'surface_custom'),
+    type,
+    name: type === 'Boundary' ? 'Boundary' : 'Surface',
+    xMin: roundCoordinate(centerX - width / 2),
+    yMin: roundCoordinate(centerY - depth / 2),
+    xMax: roundCoordinate(centerX + width / 2),
+    yMax: roundCoordinate(centerY + depth / 2),
+    zMin: 0,
+    zMax: type === 'Boundary' ? 0.18 : 0.1,
+    description: type === 'Boundary' ? 'Custom boundary' : 'Custom surface'
+  };
+  const withoutExisting = locations.filter((location) => location.type !== type);
+
+  return type === 'Boundary' ? [nextContainer, ...withoutExisting] : [...withoutExisting, nextContainer];
+}
+
+function boundsForLocations(locations: Location[]) {
+  const bounds = locations.map(normalizedBounds2d);
+
+  return {
+    xMin: Math.min(...bounds.map((location) => location.xMin)),
+    yMin: Math.min(...bounds.map((location) => location.yMin)),
+    xMax: Math.max(...bounds.map((location) => location.xMax)),
+    yMax: Math.max(...bounds.map((location) => location.yMax))
+  };
+}
+
+function expandPlanForItem(locations: Location[], item: Location) {
+  const itemBounds = normalizedBounds2d(item);
+  const padding = 4;
+
+  return locations.map((location) => {
+    if (location.type !== 'Boundary' && location.type !== 'Layout Zone') {
+      return location;
+    }
+
+    const bounds = normalizedBounds2d(location);
+    const expanded = {
+      ...location,
+      xMin: Math.min(bounds.xMin, itemBounds.xMin - padding),
+      yMin: Math.min(bounds.yMin, itemBounds.yMin - padding),
+      xMax: Math.max(bounds.xMax, itemBounds.xMax + padding),
+      yMax: Math.max(bounds.yMax, itemBounds.yMax + padding)
+    };
+
+    return expanded;
+  });
 }
 
 function findAvailableShopBounds(locations: Location[], width: number, depth: number) {
@@ -734,6 +1125,15 @@ function maxX(bounds: Array<ReturnType<typeof normalizedBounds2d>>) {
 
 function roundCoordinate(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function withDescriptionMeta(description: string | undefined, key: string, value: string) {
+  const parts = (description ?? '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && !part.toLowerCase().startsWith(`${key.toLowerCase()}:`));
+
+  return [...parts, `${key}: ${value}`].join('; ');
 }
 
 function numberInputValue(value: string) {
