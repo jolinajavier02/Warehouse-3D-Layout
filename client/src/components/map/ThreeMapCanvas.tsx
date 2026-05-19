@@ -75,8 +75,8 @@ export default function ThreeMapCanvas({
     controls.enablePan = false;
     controls.enableRotate = !staticView;
     controls.enableZoom = true;
-    controls.minZoom = 0.75;
-    controls.maxZoom = 2.4;
+    controls.minZoom = 0.35;
+    controls.maxZoom = 9;
     controlsRef.current = controls;
 
     const ambient = new THREE.HemisphereLight('#ffffff', '#a8b0b7', 1.6);

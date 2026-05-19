@@ -137,7 +137,7 @@ export default function App() {
   function handleDeleteRow(locationId: string) {
     setUploadedLocations((current) => {
       const source = current ?? locations;
-      const nextLocations = source.filter((location) => location.id !== locationId);
+      const nextLocations = recalculateExpandableContainers(source.filter((location) => location.id !== locationId));
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
       persistLocations(nextLocations, nextFileName);
@@ -179,7 +179,9 @@ export default function App() {
   function handleUpdateRow(locationId: string, patch: Partial<Location>) {
     setUploadedLocations((current) => {
       const source = current ?? locations;
-      const nextLocations = source.map((location) => (location.id === locationId ? { ...location, ...patch } : location));
+      const nextLocations = recalculateExpandableContainers(
+        source.map((location) => (location.id === locationId ? { ...location, ...patch } : location))
+      );
       const nextFileName = uploadedFileName ?? 'edited-layout.csv';
 
       persistLocations(nextLocations, nextFileName);
@@ -392,7 +394,7 @@ export default function App() {
       return;
     }
 
-    updateLayoutWithHistory((source) => source.filter((location) => location.id !== locationId));
+    updateLayoutWithHistory((source) => recalculateExpandableContainers(source.filter((location) => location.id !== locationId)));
     selection.setSelectedLocationId(null);
     selection.setHoveredLocationId(null);
   }
@@ -1318,7 +1320,7 @@ function expandPlanForItem(locations: Location[], item: Location) {
   const padding = 4;
 
   return locations.map((location) => {
-    if (location.type !== 'Boundary' && location.type !== 'Layout Zone') {
+    if (!isExpandableContainer(location)) {
       return location;
     }
 
@@ -1335,13 +1337,102 @@ function expandPlanForItem(locations: Location[], item: Location) {
   });
 }
 
+function recalculateExpandableContainers(locations: Location[]) {
+  const targetBounds = desiredExpandableBounds(locations);
+
+  if (!targetBounds) {
+    return locations;
+  }
+
+  return locations.map((location) => {
+    if (!isExpandableContainer(location)) {
+      return location;
+    }
+
+    return {
+      ...location,
+      xMin: targetBounds.xMin,
+      yMin: targetBounds.yMin,
+      xMax: targetBounds.xMax,
+      yMax: targetBounds.yMax
+    };
+  });
+}
+
+function desiredExpandableBounds(locations: Location[]) {
+  const lockedZoneBounds = locations
+    .filter((location) => location.type === 'Layout Zone' && !isExpandableContainer(location))
+    .map(normalizedBounds2d);
+  const placedItemBounds = locations
+    .filter((location) => location.type !== 'Boundary' && !isExpandableContainer(location))
+    .map(normalizedBounds2d);
+
+  if (lockedZoneBounds.length === 0 && placedItemBounds.length === 0) {
+    return null;
+  }
+
+  const baseBounds = boundsFor2dLocations(lockedZoneBounds.length > 0 ? lockedZoneBounds : placedItemBounds);
+  const padding = 4;
+
+  placedItemBounds.forEach((bounds) => {
+    if (bounds.xMin < baseBounds.xMin) {
+      baseBounds.xMin = bounds.xMin - padding;
+    }
+    if (bounds.yMin < baseBounds.yMin) {
+      baseBounds.yMin = bounds.yMin - padding;
+    }
+    if (bounds.xMax > baseBounds.xMax) {
+      baseBounds.xMax = bounds.xMax + padding;
+    }
+    if (bounds.yMax > baseBounds.yMax) {
+      baseBounds.yMax = bounds.yMax + padding;
+    }
+  });
+
+  return {
+    xMin: roundCoordinate(baseBounds.xMin),
+    yMin: roundCoordinate(baseBounds.yMin),
+    xMax: roundCoordinate(baseBounds.xMax),
+    yMax: roundCoordinate(baseBounds.yMax)
+  };
+}
+
+function isExpandableContainer(location: Location) {
+  if (location.type === 'Boundary') {
+    return true;
+  }
+
+  if (location.type !== 'Layout Zone') {
+    return false;
+  }
+
+  const text = `${location.id} ${location.name} ${location.description ?? ''}`.toLowerCase();
+
+  return (
+    text.includes('base') ||
+    text.includes('surface_auto') ||
+    text.includes('surface_custom') ||
+    text.includes('auto-expanded surface') ||
+    text.includes('custom surface')
+  );
+}
+
+function boundsFor2dLocations(bounds: Array<ReturnType<typeof normalizedBounds2d>>) {
+  return {
+    xMin: Math.min(...bounds.map((location) => location.xMin)),
+    yMin: Math.min(...bounds.map((location) => location.yMin)),
+    xMax: Math.max(...bounds.map((location) => location.xMax)),
+    yMax: Math.max(...bounds.map((location) => location.yMax))
+  };
+}
+
 function findAvailableShopBounds(locations: Location[], width: number, depth: number, zoneId?: string) {
   const container = findPlacementContainer(locations, width, depth, zoneId);
   const occupied = locations
     .filter((location) => location.type !== 'Boundary' && location.type !== 'Layout Zone')
     .map(normalizedBounds2d);
   const gap = 1.2;
-  const step = 1;
+  const step = 0.5;
   const xStart = container.xMin + gap;
   const yStart = container.yMin + gap;
   const xLimit = container.xMax - width - gap;
@@ -1362,8 +1453,8 @@ function findAvailableShopBounds(locations: Location[], width: number, depth: nu
     }
   }
 
-  const fallbackX = Math.max(container.xMin + gap, maxX(occupied) + gap);
-  const fallbackY = yStart;
+  const fallbackX = clampCoordinate(maxX(occupied) + gap, xStart, xLimit);
+  const fallbackY = clampCoordinate(yStart, yStart, yLimit);
 
   return {
     xMin: roundCoordinate(fallbackX),
@@ -1373,15 +1464,20 @@ function findAvailableShopBounds(locations: Location[], width: number, depth: nu
   };
 }
 
+function clampCoordinate(value: number, min: number, max: number) {
+  if (max < min) {
+    return min;
+  }
+
+  return Math.min(Math.max(value, min), max);
+}
+
 function findPlacementContainer(locations: Location[], width: number, depth: number, zoneId?: string) {
   const selectedZone = zoneId ? locations.find((location) => location.id === zoneId && location.type === 'Layout Zone') : null;
 
   if (selectedZone) {
     const bounds = normalizedBounds2d(selectedZone);
-
-    if (bounds.xMax - bounds.xMin >= width + 2 && bounds.yMax - bounds.yMin >= depth + 2) {
-      return bounds;
-    }
+    return bounds;
   }
 
   const candidates = locations
