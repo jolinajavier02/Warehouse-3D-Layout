@@ -51,9 +51,7 @@ const scale = 18;
 const isoXScale = 0.96;
 const zScale = 12;
 const minZoom = 0.7;
-const maxZoom = 3.2;
-const minPitch = 0.32;
-const maxPitch = 0.82;
+const maxZoom = 5;
 
 export default function IsometricMap({
   locations,
@@ -65,11 +63,11 @@ export default function IsometricMap({
 }: IsometricMapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const activePointersRef = useRef(new Map<number, Point>());
-  const dragStateRef = useRef<{ x: number; y: number; rotation: number } | null>(null);
+  const dragStateRef = useRef<{ x: number; y: number; offset: Point; viewBox: ViewBox } | null>(null);
   const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(-28);
-  const [pitch, setPitch] = useState(0.54);
+  const [zoom, setZoom] = useState(1.28);
+  const [rotation] = useState(-28);
+  const [pitch] = useState(0.54);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const searched = useMemo(() => new Set(searchedLocationIds), [searchedLocationIds]);
   const center = useMemo(() => getLocationCenter(locations), [locations]);
@@ -215,7 +213,8 @@ export default function IsometricMap({
     dragStateRef.current = {
       x: event.clientX,
       y: event.clientY,
-      rotation
+      offset,
+      viewBox
     };
   }
 
@@ -248,15 +247,14 @@ export default function IsometricMap({
 
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
+    const bounds = svg.getBoundingClientRect();
+    const xRatio = drag.viewBox.width / Math.max(bounds.width, 1);
+    const yRatio = drag.viewBox.height / Math.max(bounds.height, 1);
 
-    setRotation(normalizeAngle(drag.rotation + dx * 0.35));
-    setPitch((current) => clamp(current - dy * 0.0025, minPitch, maxPitch));
-    dragStateRef.current = {
-      ...drag,
-      x: event.clientX,
-      y: event.clientY,
-      rotation: normalizeAngle(drag.rotation + dx * 0.35)
-    };
+    setOffset({
+      x: drag.offset.x - dx * xRatio,
+      y: drag.offset.y - dy * yRatio
+    });
   }
 
   function handlePointerEnd(event: ReactPointerEvent<SVGSVGElement>) {
@@ -274,7 +272,8 @@ export default function IsometricMap({
       dragStateRef.current = {
         x: remaining.x,
         y: remaining.y,
-        rotation
+        offset,
+        viewBox
       };
       return;
     }
@@ -578,15 +577,4 @@ function shadeColor(color: string, percent: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
-}
-
-function normalizeAngle(value: number) {
-  if (value > 180) {
-    return value - 360;
-  }
-  if (value < -180) {
-    return value + 360;
-  }
-
-  return value;
 }

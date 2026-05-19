@@ -46,7 +46,9 @@ export default function MapContainer({
           </small>
         </aside>
       )}
-      <p className="map-hint">{staticView ? 'Scroll to zoom and click a block to select it' : 'Pinch or scroll to zoom and drag to rotate'}</p>
+      <p className="map-hint">
+        {staticView ? 'Scroll to zoom and click a block to select it' : 'Drag to move, scroll to zoom, center knob rotates'}
+      </p>
     </section>
   );
 }
