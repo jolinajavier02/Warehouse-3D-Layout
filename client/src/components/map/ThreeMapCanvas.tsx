@@ -33,7 +33,7 @@ export default function ThreeMapCanvas({
   const groupRef = useRef<THREE.Group | null>(null);
   const meshesRef = useRef<LocationMesh[]>([]);
   const pointerDownPositionRef = useRef<{ x: number; y: number } | null>(null);
-  const rotationKnobRef = useRef<{ angle: number } | null>(null);
+  const rotationKnobRef = useRef<{ x: number; y: number } | null>(null);
   const [canvasError, setCanvasError] = useState<string | null>(null);
   const [controllerVisible, setControllerVisible] = useState(true);
 
@@ -317,7 +317,8 @@ export default function ThreeMapCanvas({
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     rotationKnobRef.current = {
-      angle: getControlAngle(event.clientX, event.clientY, event.currentTarget)
+      x: event.clientX,
+      y: event.clientY
     };
   };
 
@@ -329,10 +330,14 @@ export default function ThreeMapCanvas({
     }
 
     event.preventDefault();
-    const nextAngle = getControlAngle(event.clientX, event.clientY, event.currentTarget);
-    const delta = shortestAngleDelta(rotationKnob.angle, nextAngle);
-    rotateCamera(delta);
-    rotationKnobRef.current = { angle: nextAngle };
+    const dx = event.clientX - rotationKnob.x;
+    const dy = event.clientY - rotationKnob.y;
+    const dominantDelta = Math.abs(dx) >= Math.abs(dy) ? dx : -dy;
+
+    if (Math.abs(dominantDelta) >= 1) {
+      rotateCamera(dominantDelta * 0.45);
+      rotationKnobRef.current = { x: event.clientX, y: event.clientY };
+    }
   };
 
   const handleRotationKnobPointerEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -456,27 +461,6 @@ function setOrthographicFrame(camera: THREE.OrthographicCamera, viewHeight: numb
   camera.top = viewHeight / 2;
   camera.bottom = -viewHeight / 2;
   camera.updateProjectionMatrix();
-}
-
-function getControlAngle(clientX: number, clientY: number, element: HTMLElement) {
-  const bounds = element.getBoundingClientRect();
-  const centerX = bounds.left + bounds.width / 2;
-  const centerY = bounds.top + bounds.height / 2;
-
-  return THREE.MathUtils.radToDeg(Math.atan2(clientY - centerY, clientX - centerX));
-}
-
-function shortestAngleDelta(previousAngle: number, nextAngle: number) {
-  let delta = nextAngle - previousAngle;
-
-  if (delta > 180) {
-    delta -= 360;
-  }
-  if (delta < -180) {
-    delta += 360;
-  }
-
-  return delta;
 }
 
 function frameEmptyMap(camera: THREE.OrthographicCamera, controls: OrbitControls, aspect: number) {

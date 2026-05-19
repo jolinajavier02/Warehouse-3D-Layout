@@ -42,6 +42,7 @@ const shopAccentColors = [
 ];
 
 const dimensionColors = ['#475569', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#db2777'];
+type WorkerPose = 'pointing' | 'carrying' | 'stacking' | 'clipboard' | 'sitting';
 
 export function createLocationMesh(location: Location): LocationMesh {
   const bounds = normalizedBounds(location);
@@ -334,20 +335,26 @@ function createWarehouseActivityLayer(locations: Location[], bounds: ReturnType<
   const carryingWorker = pointInArea(rightStorageArea, 0.38, 0.32);
   const stackingWorker = pointInArea(leftStorageArea, 0.58, 0.56);
   const forkliftSpot = pointInArea(receivingArea, 0.7, 0.55);
+  const leftForkliftSpot = pointInArea(leftStorageArea, 0.22, 0.78);
+  const rightForkliftSpot = pointInArea(rightStorageArea, 0.72, 0.62);
   const deskSpot = pointInArea(officeArea, 0.72, 0.42);
-  const workerHeight = 3.25;
+  const workerHeight = 3.65;
+  const deskOffset = Math.min(areaWidth(officeArea) * 0.04, 1.2);
+  const deskScale = 2.05;
 
-  group.add(createWorker(walkingWorker.x, walkingWorker.z, workerHeight, 0.55, 'walking'));
+  group.add(createWorker(walkingWorker.x, walkingWorker.z, workerHeight, 0.55, 'pointing'));
   group.add(createWorker(carryingWorker.x, carryingWorker.z, workerHeight, -0.65, 'carrying'));
   group.add(createWorker(stackingWorker.x, stackingWorker.z, workerHeight, 0.35, 'stacking'));
-  group.add(createWorker(forkliftSpot.x - areaWidth(receivingArea) * 0.14, forkliftSpot.z + areaDepth(receivingArea) * 0.1, workerHeight, 1.1, 'standing'));
-  group.add(createWorker(deskSpot.x - areaWidth(officeArea) * 0.08, deskSpot.z + areaDepth(officeArea) * 0.03, 2.75, -0.05, 'sitting'));
+  group.add(createWorker(forkliftSpot.x - areaWidth(receivingArea) * 0.14, forkliftSpot.z + areaDepth(receivingArea) * 0.1, workerHeight, 1.1, 'clipboard'));
+  group.add(createWorker(deskSpot.x + deskOffset - 0.58 * deskScale, deskSpot.z + 0.14 * deskScale, 3.1, -0.2, 'sitting'));
 
-  group.add(createHandTruck(carryingWorker.x + areaWidth(rightStorageArea) * 0.12, carryingWorker.z + areaDepth(rightStorageArea) * 0.1, 1.65));
-  group.add(createBoxStack(stackingWorker.x + areaWidth(leftStorageArea) * 0.12, stackingWorker.z - areaDepth(leftStorageArea) * 0.05, 1.7, 3));
-  group.add(createForklift(forkliftSpot.x + areaWidth(receivingArea) * 0.08, forkliftSpot.z, 2.2, -0.22));
-  group.add(createBoxStack(forkliftSpot.x - areaWidth(receivingArea) * 0.08, forkliftSpot.z - areaDepth(receivingArea) * 0.16, 1.45, 2));
-  group.add(createDeskStation(deskSpot.x + areaWidth(officeArea) * 0.08, deskSpot.z, 1.65));
+  group.add(createHandTruck(carryingWorker.x + areaWidth(rightStorageArea) * 0.12, carryingWorker.z + areaDepth(rightStorageArea) * 0.1, 2.05));
+  group.add(createBoxStack(stackingWorker.x + areaWidth(leftStorageArea) * 0.12, stackingWorker.z - areaDepth(leftStorageArea) * 0.05, 2.15, 3));
+  group.add(createForklift(forkliftSpot.x + areaWidth(receivingArea) * 0.08, forkliftSpot.z, 2.65, -0.22));
+  group.add(createForklift(leftForkliftSpot.x, leftForkliftSpot.z, 2.15, 0.85));
+  group.add(createForklift(rightForkliftSpot.x, rightForkliftSpot.z, 2.15, -0.7));
+  group.add(createBoxStack(forkliftSpot.x - areaWidth(receivingArea) * 0.08, forkliftSpot.z - areaDepth(receivingArea) * 0.16, 1.8, 2));
+  group.add(createDeskStation(deskSpot.x + deskOffset, deskSpot.z, deskScale));
 
   group.traverse((object) => {
     object.castShadow = true;
@@ -395,29 +402,34 @@ function areaDepth(area: Pick<ReturnType<typeof normalizedBounds>, 'yMin' | 'yMa
   return Math.max(area.yMax - area.yMin, 1);
 }
 
-function createWorker(x: number, z: number, height: number, rotationY: number, pose: 'walking' | 'carrying' | 'stacking' | 'standing' | 'sitting') {
+function createWorker(x: number, z: number, height: number, rotationY: number, pose: WorkerPose) {
   const group = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: '#f3c27a', roughness: 0.58 });
-  const hardHat = new THREE.MeshStandardMaterial({ color: '#facc15', roughness: 0.5 });
-  const shirt = new THREE.MeshStandardMaterial({ color: '#e5eef6', roughness: 0.62 });
-  const overalls = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.68 });
-  const vest = new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.58 });
+  const skin = new THREE.MeshStandardMaterial({ color: pose === 'carrying' ? '#8f5a3f' : '#ffb18f', roughness: 0.58 });
+  const hardHat = new THREE.MeshStandardMaterial({ color: '#fbbf24', roughness: 0.5 });
+  const shirt = new THREE.MeshStandardMaterial({ color: pose === 'pointing' ? '#f8fafc' : '#fbbf24', roughness: 0.62 });
+  const overalls = new THREE.MeshStandardMaterial({ color: '#256d8f', roughness: 0.68 });
+  const pants = new THREE.MeshStandardMaterial({ color: '#2f7ea3', roughness: 0.68 });
+  const vest = new THREE.MeshStandardMaterial({ color: '#1f6f8b', roughness: 0.58 });
   const shoeMaterial = new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.7 });
-  const hairMaterial = new THREE.MeshStandardMaterial({ color: '#6b3f1f', roughness: 0.72 });
+  const hairMaterial = new THREE.MeshStandardMaterial({ color: pose === 'clipboard' ? '#111827' : '#8b4c2b', roughness: 0.72 });
+  const faceMaterial = new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.7 });
   const scale = height / 1.8;
   const baseY = pose === 'sitting' ? 0.48 * scale : 0;
   const bodyHeight = pose === 'sitting' ? 0.58 * scale : 0.78 * scale;
   const legHeight = pose === 'sitting' ? 0.42 * scale : 0.72 * scale;
   const headRadius = 0.18 * scale;
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075 * scale, 0.085 * scale, 0.14 * scale, 12), skin);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2 * scale, bodyHeight, 8, 16), shirt);
-  const bib = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.42 * scale, 0.24 * scale), overalls);
-  const vestLeft = new THREE.Mesh(new THREE.BoxGeometry(0.07 * scale, 0.5 * scale, 0.27 * scale), vest);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22 * scale, bodyHeight, 8, 18), shirt);
+  const bib = new THREE.Mesh(new THREE.BoxGeometry(0.38 * scale, 0.48 * scale, 0.27 * scale), overalls);
+  const vestLeft = new THREE.Mesh(new THREE.BoxGeometry(0.075 * scale, 0.58 * scale, 0.3 * scale), vest);
   const vestRight = vestLeft.clone();
   const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 18, 12), skin);
   const helmet = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 1.06, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.52), hardHat);
+  const helmetBrim = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.035 * scale, 0.18 * scale), hardHat);
   const hair = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.94, 16, 8, 0, Math.PI * 2, Math.PI * 0.42, Math.PI * 0.45), hairMaterial);
   const nose = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.18, 10, 8), skin);
+  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.045, 8, 6), faceMaterial);
+  const rightEye = leftEye.clone();
 
   body.position.y = baseY + legHeight + bodyHeight * 0.5;
   bib.position.set(0, body.position.y + 0.03 * scale, -0.04 * scale);
@@ -427,21 +439,37 @@ function createWorker(x: number, z: number, height: number, rotationY: number, p
   head.position.y = baseY + legHeight + bodyHeight + headRadius * 1.7;
   helmet.position.copy(head.position);
   helmet.position.y += headRadius * 0.08;
+  helmetBrim.position.set(0, head.position.y + headRadius * 0.42, -headRadius * 0.88);
   hair.position.copy(head.position);
   hair.position.y -= headRadius * 0.08;
   nose.position.set(0, head.position.y - headRadius * 0.02, -headRadius * 0.9);
+  leftEye.position.set(-headRadius * 0.35, head.position.y + headRadius * 0.12, -headRadius * 0.88);
+  rightEye.position.set(headRadius * 0.35, head.position.y + headRadius * 0.12, -headRadius * 0.88);
 
-  group.add(body, bib, vestLeft, vestRight, neck, head, hair, helmet, nose);
-  addWorkerLimbs(group, skin, overalls, shoeMaterial, scale, pose);
+  group.add(body, bib, vestLeft, vestRight, neck, head, hair, helmet, helmetBrim, nose, leftEye, rightEye);
+  addWorkerLimbs(group, skin, shirt, pants, shoeMaterial, scale, pose);
 
   if (pose === 'carrying') {
-    const box = createCardboardBox(0, baseY + legHeight + bodyHeight * 0.42, -0.44 * scale, 0.52 * scale, 0.42 * scale, 0.46 * scale);
+    const box = createCardboardBox(0, baseY + legHeight + bodyHeight * 0.42, -0.48 * scale, 0.6 * scale, 0.48 * scale, 0.52 * scale);
     group.add(box);
   }
 
   if (pose === 'stacking') {
-    const box = createCardboardBox(0.34 * scale, baseY + legHeight + bodyHeight * 0.58, -0.28 * scale, 0.42 * scale, 0.34 * scale, 0.42 * scale);
+    const box = createCardboardBox(0.2 * scale, baseY + legHeight + bodyHeight * 0.78, -0.34 * scale, 0.58 * scale, 0.46 * scale, 0.52 * scale);
     group.add(box);
+  }
+
+  if (pose === 'clipboard') {
+    const clipboardMaterial = new THREE.MeshStandardMaterial({ color: '#1e1b4b', roughness: 0.62 });
+    const clipboard = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.48 * scale, 0.035 * scale), clipboardMaterial);
+    clipboard.position.set(0.36 * scale, baseY + legHeight + bodyHeight * 0.52, -0.28 * scale);
+    clipboard.rotation.z = -0.24;
+    group.add(clipboard);
+
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.42, 14, 8), faceMaterial);
+    beard.scale.set(0.88, 0.52, 0.42);
+    beard.position.set(0, head.position.y - headRadius * 0.42, -headRadius * 0.72);
+    group.add(beard);
   }
 
   group.position.set(x, 0.08, z);
@@ -453,39 +481,42 @@ function createWorker(x: number, z: number, height: number, rotationY: number, p
 function addWorkerLimbs(
   group: THREE.Group,
   skin: THREE.Material,
-  overalls: THREE.Material,
+  sleeveMaterial: THREE.Material,
+  pants: THREE.Material,
   shoeMaterial: THREE.Material,
   scale: number,
-  pose: 'walking' | 'carrying' | 'stacking' | 'standing' | 'sitting'
+  pose: WorkerPose
 ) {
   const legY = pose === 'sitting' ? 0.58 * scale : 0.38 * scale;
-  const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.055 * scale, 0.065 * scale, 0.72 * scale, 10), overalls);
+  const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.065 * scale, 0.075 * scale, 0.74 * scale, 10), pants);
   const rightLeg = leftLeg.clone();
-  const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.045 * scale, 0.052 * scale, 0.62 * scale, 10), skin);
+  const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.055 * scale, 0.062 * scale, 0.66 * scale, 10), sleeveMaterial);
   const rightArm = leftArm.clone();
   const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.065 * scale, 12, 8), skin);
   const rightHand = leftHand.clone();
   const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.08 * scale, 0.28 * scale), shoeMaterial);
   const rightShoe = leftShoe.clone();
 
-  leftLeg.position.set(-0.12 * scale, legY, pose === 'walking' ? 0.12 * scale : 0);
-  rightLeg.position.set(0.12 * scale, legY, pose === 'walking' ? -0.12 * scale : 0);
-  leftShoe.position.set(-0.12 * scale, 0.06 * scale, pose === 'walking' ? 0.26 * scale : 0.06 * scale);
-  rightShoe.position.set(0.12 * scale, 0.06 * scale, pose === 'walking' ? -0.26 * scale : 0.06 * scale);
+  leftLeg.position.set(-0.12 * scale, legY, pose === 'pointing' ? 0.12 * scale : 0);
+  rightLeg.position.set(0.12 * scale, legY, pose === 'pointing' ? -0.12 * scale : 0);
+  leftShoe.position.set(-0.12 * scale, 0.06 * scale, pose === 'pointing' ? 0.26 * scale : 0.06 * scale);
+  rightShoe.position.set(0.12 * scale, 0.06 * scale, pose === 'pointing' ? -0.26 * scale : 0.06 * scale);
   leftArm.position.set(-0.34 * scale, 1.24 * scale, 0);
   rightArm.position.set(0.34 * scale, 1.24 * scale, 0);
   leftHand.position.set(-0.36 * scale, 0.94 * scale, 0);
   rightHand.position.set(0.36 * scale, 0.94 * scale, 0);
 
-  if (pose === 'walking') {
+  if (pose === 'pointing') {
     leftLeg.rotation.x = -0.35;
     rightLeg.rotation.x = 0.35;
-    leftArm.rotation.x = 0.45;
-    rightArm.rotation.x = -0.45;
+    leftArm.position.set(-0.34 * scale, 1.05 * scale, 0.08 * scale);
+    leftArm.rotation.x = 0.72;
     leftArm.rotation.z = -0.2;
-    rightArm.rotation.z = 0.2;
-    leftHand.position.set(-0.38 * scale, 0.96 * scale, -0.18 * scale);
-    rightHand.position.set(0.38 * scale, 0.96 * scale, 0.18 * scale);
+    rightArm.position.set(0.44 * scale, 1.46 * scale, -0.28 * scale);
+    rightArm.rotation.x = Math.PI / 2.2;
+    rightArm.rotation.z = -0.95;
+    leftHand.position.set(-0.38 * scale, 0.78 * scale, -0.18 * scale);
+    rightHand.position.set(0.82 * scale, 1.72 * scale, -0.58 * scale);
   } else if (pose === 'carrying') {
     leftArm.position.set(-0.26 * scale, 1.15 * scale, -0.22 * scale);
     rightArm.position.set(0.26 * scale, 1.15 * scale, -0.22 * scale);
@@ -503,12 +534,27 @@ function addWorkerLimbs(
     leftHand.position.set(-0.36 * scale, 1.44 * scale, -0.48 * scale);
     rightHand.position.set(0.36 * scale, 1.44 * scale, -0.48 * scale);
   } else if (pose === 'sitting') {
+    leftLeg.position.set(-0.13 * scale, 0.5 * scale, -0.12 * scale);
+    rightLeg.position.set(0.13 * scale, 0.5 * scale, -0.12 * scale);
+    leftShoe.position.set(-0.14 * scale, 0.42 * scale, -0.5 * scale);
+    rightShoe.position.set(0.14 * scale, 0.42 * scale, -0.5 * scale);
     leftLeg.rotation.x = Math.PI / 2.3;
     rightLeg.rotation.x = Math.PI / 2.3;
+    leftArm.position.set(-0.24 * scale, 1.18 * scale, -0.18 * scale);
+    rightArm.position.set(0.24 * scale, 1.18 * scale, -0.18 * scale);
     leftArm.rotation.x = Math.PI / 2.7;
     rightArm.rotation.x = Math.PI / 2.7;
-    leftHand.position.set(-0.24 * scale, 0.96 * scale, -0.4 * scale);
-    rightHand.position.set(0.24 * scale, 0.96 * scale, -0.4 * scale);
+    leftHand.position.set(-0.24 * scale, 1.03 * scale, -0.55 * scale);
+    rightHand.position.set(0.24 * scale, 1.03 * scale, -0.55 * scale);
+  } else if (pose === 'clipboard') {
+    leftArm.position.set(-0.42 * scale, 1.5 * scale, -0.14 * scale);
+    leftArm.rotation.x = Math.PI / 2.25;
+    leftArm.rotation.z = 0.95;
+    rightArm.position.set(0.28 * scale, 1.18 * scale, -0.18 * scale);
+    rightArm.rotation.x = Math.PI / 2.75;
+    rightArm.rotation.z = -0.35;
+    leftHand.position.set(-0.86 * scale, 1.76 * scale, -0.44 * scale);
+    rightHand.position.set(0.4 * scale, 1.02 * scale, -0.46 * scale);
   } else {
     leftArm.rotation.z = -0.2;
     rightArm.rotation.z = 0.2;
@@ -518,15 +564,22 @@ function addWorkerLimbs(
 }
 
 function createCardboardBox(x: number, y: number, z: number, width: number, height: number, depth: number) {
-  const material = new THREE.MeshStandardMaterial({ color: '#d9902f', roughness: 0.72 });
+  const material = new THREE.MeshStandardMaterial({ color: '#e99a4f', roughness: 0.72 });
+  const tapeMaterial = new THREE.MeshStandardMaterial({ color: '#c87932', roughness: 0.72 });
   const edgeMaterial = new THREE.LineBasicMaterial({ color: '#9a5b17', transparent: true, opacity: 0.65 });
   const box = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  const frontTape = new THREE.Mesh(new THREE.BoxGeometry(width * 0.08, height * 0.92, 0.018), tapeMaterial);
+  const topTape = new THREE.Mesh(new THREE.BoxGeometry(width * 0.08, 0.018, depth * 0.92), tapeMaterial);
+  const label = new THREE.Mesh(new THREE.BoxGeometry(width * 0.22, height * 0.12, 0.012), new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.75 }));
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), edgeMaterial);
   const group = new THREE.Group();
 
   box.position.set(x, y, z);
+  frontTape.position.set(x, y, z - depth * 0.51);
+  topTape.position.set(x, y + height * 0.51, z);
+  label.position.set(x + width * 0.25, y - height * 0.12, z - depth * 0.515);
   edges.position.copy(box.position);
-  group.add(box, edges);
+  group.add(box, frontTape, topTape, label, edges);
 
   return group;
 }
@@ -580,27 +633,51 @@ function createForklift(x: number, z: number, scale: number, rotationY: number) 
   const yellow = new THREE.MeshStandardMaterial({ color: '#f6b21a', roughness: 0.56 });
   const dark = new THREE.MeshStandardMaterial({ color: '#1f2937', roughness: 0.62, metalness: 0.12 });
   const glass = new THREE.MeshStandardMaterial({ color: '#93c5fd', roughness: 0.25, transparent: true, opacity: 0.58 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.55 * scale, 0.72 * scale, 1.1 * scale), yellow);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.78 * scale, 0.86 * scale, 0.92 * scale), yellow);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9 * scale, 0.72 * scale, 1.12 * scale), yellow);
+  const frontHood = new THREE.Mesh(new THREE.BoxGeometry(0.9 * scale, 0.42 * scale, 1.02 * scale), yellow);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.82 * scale, 0.86 * scale, 0.92 * scale), yellow);
   const window = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.52 * scale, 0.96 * scale), glass);
-  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 1.5 * scale, 1.05 * scale), dark);
-  const forkLeft = new THREE.Mesh(new THREE.BoxGeometry(1.25 * scale, 0.06 * scale, 0.08 * scale), dark);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(0.92 * scale, 0.1 * scale, 1 * scale), dark);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.32 * scale, 0.42 * scale), dark);
+  const steeringWheel = new THREE.Mesh(new THREE.TorusGeometry(0.14 * scale, 0.025 * scale, 8, 18), dark);
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 1.8 * scale, 1.12 * scale), dark);
+  const mastRail = new THREE.Mesh(new THREE.BoxGeometry(0.09 * scale, 1.62 * scale, 0.09 * scale), dark);
+  const forkLeft = new THREE.Mesh(new THREE.BoxGeometry(1.55 * scale, 0.06 * scale, 0.08 * scale), dark);
   const forkRight = forkLeft.clone();
 
   body.position.set(0, 0.42 * scale, 0);
+  frontHood.position.set(0.74 * scale, 0.78 * scale, 0);
   cabin.position.set(-0.34 * scale, 1.06 * scale, 0);
   window.position.set(-0.5 * scale, 1.1 * scale, 0);
-  mast.position.set(0.86 * scale, 0.92 * scale, 0);
-  forkLeft.position.set(1.45 * scale, 0.18 * scale, -0.34 * scale);
-  forkRight.position.set(1.45 * scale, 0.18 * scale, 0.34 * scale);
-  group.add(body, cabin, window, mast, forkLeft, forkRight);
+  roof.position.set(-0.34 * scale, 1.58 * scale, 0);
+  seat.position.set(-0.44 * scale, 0.78 * scale, 0);
+  steeringWheel.position.set(0.08 * scale, 1.08 * scale, -0.18 * scale);
+  steeringWheel.rotation.x = Math.PI / 2.8;
+  mast.position.set(1.08 * scale, 1.02 * scale, 0);
+  mastRail.position.set(1.22 * scale, 1.08 * scale, -0.46 * scale);
+  const mastRailRight = mastRail.clone();
+  mastRailRight.position.z = 0.46 * scale;
+  forkLeft.position.set(1.88 * scale, 0.18 * scale, -0.34 * scale);
+  forkRight.position.set(1.88 * scale, 0.18 * scale, 0.34 * scale);
+  group.add(body, frontHood, cabin, window, roof, seat, steeringWheel, mast, mastRail, mastRailRight, forkLeft, forkRight);
+
+  for (const postZ of [-0.42, 0.42]) {
+    for (const postX of [-0.68, 0.02]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 1.28 * scale, 0.08 * scale), dark);
+      post.position.set(postX * scale, 1.02 * scale, postZ * scale);
+      group.add(post);
+    }
+  }
 
   for (const wheelX of [-0.56, 0.55]) {
     for (const wheelZ of [-0.5, 0.5]) {
-      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.22 * scale, 0.16 * scale, 18), dark);
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.26 * scale, 0.26 * scale, 0.18 * scale, 22), dark);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.12 * scale, 0.19 * scale, 16), new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.58 }));
       tire.position.set(wheelX * scale, 0.16 * scale, wheelZ * scale);
+      hub.position.copy(tire.position);
       tire.rotation.x = Math.PI / 2;
-      group.add(tire);
+      hub.rotation.x = Math.PI / 2;
+      group.add(tire, hub);
     }
   }
 
@@ -612,17 +689,24 @@ function createForklift(x: number, z: number, scale: number, rotationY: number) 
 
 function createDeskStation(x: number, z: number, scale: number) {
   const group = new THREE.Group();
-  const wood = new THREE.MeshStandardMaterial({ color: '#a16207', roughness: 0.66 });
+  const wood = new THREE.MeshStandardMaterial({ color: '#b7791f', roughness: 0.66 });
   const dark = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.62 });
+  const paperMaterial = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.78 });
   const screen = new THREE.MeshStandardMaterial({ color: '#60a5fa', roughness: 0.35, emissive: '#1d4ed8', emissiveIntensity: 0.16 });
-  const table = new THREE.Mesh(new THREE.BoxGeometry(1.25 * scale, 0.12 * scale, 0.72 * scale), wood);
-  const monitor = new THREE.Mesh(new THREE.BoxGeometry(0.46 * scale, 0.32 * scale, 0.04 * scale), screen);
-  const chair = new THREE.Mesh(new THREE.BoxGeometry(0.42 * scale, 0.44 * scale, 0.42 * scale), dark);
+  const table = new THREE.Mesh(new THREE.BoxGeometry(1.55 * scale, 0.12 * scale, 0.86 * scale), wood);
+  const monitor = new THREE.Mesh(new THREE.BoxGeometry(0.52 * scale, 0.36 * scale, 0.05 * scale), screen);
+  const monitorStand = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.22 * scale, 0.08 * scale), dark);
+  const chair = new THREE.Mesh(new THREE.BoxGeometry(0.48 * scale, 0.2 * scale, 0.48 * scale), dark);
+  const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.58 * scale, 0.08 * scale), dark);
+  const paper = new THREE.Mesh(new THREE.BoxGeometry(0.38 * scale, 0.012 * scale, 0.28 * scale), paperMaterial);
 
   table.position.set(0, 0.58 * scale, 0);
-  monitor.position.set(0.1 * scale, 0.86 * scale, -0.24 * scale);
+  monitor.position.set(0.12 * scale, 0.93 * scale, -0.28 * scale);
+  monitorStand.position.set(0.12 * scale, 0.72 * scale, -0.24 * scale);
   chair.position.set(-0.58 * scale, 0.28 * scale, 0.14 * scale);
-  group.add(table, monitor, chair);
+  chairBack.position.set(-0.7 * scale, 0.56 * scale, 0.35 * scale);
+  paper.position.set(0.48 * scale, 0.65 * scale, 0.12 * scale);
+  group.add(table, monitor, monitorStand, chair, chairBack, paper);
 
   for (const xOffset of [-0.5, 0.5]) {
     for (const zOffset of [-0.26, 0.26]) {

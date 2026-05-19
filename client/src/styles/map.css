@@ -21,8 +21,9 @@
 
 .map-movement-controller {
   position: absolute;
-  top: 58px;
+  top: auto;
   right: 18px;
+  bottom: 18px;
   z-index: 4;
   display: grid;
   gap: 12px;
@@ -50,8 +51,9 @@
 
 .map-controller-toggle {
   position: absolute;
-  top: 18px;
+  top: auto;
   right: 18px;
+  bottom: 238px;
   z-index: 5;
   display: grid;
   place-items: center;
@@ -140,8 +142,8 @@
 
 .pad-button {
   position: absolute;
-  width: 76px;
-  height: 76px;
+  width: 58px;
+  height: 58px;
   padding: 0;
 }
 
@@ -153,8 +155,8 @@
 }
 
 .pad-up {
-  top: 8px;
-  left: 48px;
+  top: 12px;
+  left: 57px;
   border-radius: 48px 48px 15px 15px;
 }
 
@@ -164,8 +166,8 @@
 }
 
 .pad-right {
-  top: 48px;
-  right: 8px;
+  top: 57px;
+  right: 12px;
   border-radius: 15px 48px 48px 15px;
 }
 
@@ -175,8 +177,8 @@
 }
 
 .pad-down {
-  bottom: 8px;
-  left: 48px;
+  bottom: 12px;
+  left: 57px;
   border-radius: 15px 15px 48px 48px;
 }
 
@@ -186,8 +188,8 @@
 }
 
 .pad-left {
-  top: 48px;
-  left: 8px;
+  top: 57px;
+  left: 12px;
   border-radius: 48px 15px 15px 48px;
 }
 
@@ -200,8 +202,8 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 74px;
-  height: 74px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background:
@@ -219,8 +221,8 @@
 
 .pad-center-ring {
   position: relative;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border: 3px solid rgba(3, 7, 18, 0.58);
   border-right-color: rgba(3, 7, 18, 0.18);
   border-radius: 50%;
@@ -513,6 +515,12 @@
     padding: 8px;
   }
 
+  .map-controller-toggle {
+    top: auto;
+    right: 12px;
+    bottom: 232px;
+  }
+
   .map-orbit-pad {
     width: 148px;
     height: 148px;
@@ -524,18 +532,34 @@
   }
 
   .pad-button {
-    width: 64px;
-    height: 64px;
+    width: 50px;
+    height: 50px;
   }
 
   .pad-up,
   .pad-down {
-    left: 42px;
+    left: 49px;
   }
 
   .pad-left,
   .pad-right {
-    top: 42px;
+    top: 49px;
+  }
+
+  .pad-up {
+    top: 10px;
+  }
+
+  .pad-right {
+    right: 10px;
+  }
+
+  .pad-down {
+    bottom: 10px;
+  }
+
+  .pad-left {
+    left: 10px;
   }
 
   .pad-center {
