@@ -190,6 +190,7 @@ export function buildLocationGroup(locations: Location[]) {
   });
 
   if (planBounds) {
+    group.add(createWarehouseActivityLayer(locations, planBounds));
     group.add(createDimensionLayer(locations, planBounds));
   }
 
@@ -316,6 +317,323 @@ function createAnimalDecoration(x: number, baseY: number, z: number, width: numb
   group.traverse((object) => {
     object.castShadow = true;
   });
+
+  return group;
+}
+
+function createWarehouseActivityLayer(locations: Location[], bounds: ReturnType<typeof getPlanBounds> & {}) {
+  const group = new THREE.Group();
+  const fallbackArea = { xMin: bounds.xMin, xMax: bounds.xMax, yMin: bounds.yMin, yMax: bounds.yMax };
+  const receivingArea = findActivityArea(locations, ['receiving', 'dock', 'loading'], ['Dock', 'Work Area', 'Operation Area']) ?? fallbackArea;
+  const leftStorageArea = findActivityArea(locations, ['left storage', 'zone b', 'storage'], ['Rack', 'Shelf', 'Layout Zone']) ?? fallbackArea;
+  const rightStorageArea = findActivityArea(locations, ['right storage', 'zone c', 'storage'], ['Rack', 'Shelf', 'Layout Zone']) ?? fallbackArea;
+  const aisleArea = findActivityArea(locations, ['main horizontal way', 'main aisle', 'way', 'aisle'], ['Path', 'Main Aisle']) ?? fallbackArea;
+  const officeArea = findActivityArea(locations, ['office', 'open zone', 'planning'], ['Office', 'Layout Zone']) ?? fallbackArea;
+
+  const walkingWorker = pointInArea(aisleArea, 0.22, 0.48);
+  const carryingWorker = pointInArea(rightStorageArea, 0.38, 0.32);
+  const stackingWorker = pointInArea(leftStorageArea, 0.58, 0.56);
+  const forkliftSpot = pointInArea(receivingArea, 0.7, 0.55);
+  const deskSpot = pointInArea(officeArea, 0.72, 0.42);
+  const workerHeight = 3.25;
+
+  group.add(createWorker(walkingWorker.x, walkingWorker.z, workerHeight, 0.55, 'walking'));
+  group.add(createWorker(carryingWorker.x, carryingWorker.z, workerHeight, -0.65, 'carrying'));
+  group.add(createWorker(stackingWorker.x, stackingWorker.z, workerHeight, 0.35, 'stacking'));
+  group.add(createWorker(forkliftSpot.x - areaWidth(receivingArea) * 0.14, forkliftSpot.z + areaDepth(receivingArea) * 0.1, workerHeight, 1.1, 'standing'));
+  group.add(createWorker(deskSpot.x - areaWidth(officeArea) * 0.08, deskSpot.z + areaDepth(officeArea) * 0.03, 2.75, -0.05, 'sitting'));
+
+  group.add(createHandTruck(carryingWorker.x + areaWidth(rightStorageArea) * 0.12, carryingWorker.z + areaDepth(rightStorageArea) * 0.1, 1.65));
+  group.add(createBoxStack(stackingWorker.x + areaWidth(leftStorageArea) * 0.12, stackingWorker.z - areaDepth(leftStorageArea) * 0.05, 1.7, 3));
+  group.add(createForklift(forkliftSpot.x + areaWidth(receivingArea) * 0.08, forkliftSpot.z, 2.2, -0.22));
+  group.add(createBoxStack(forkliftSpot.x - areaWidth(receivingArea) * 0.08, forkliftSpot.z - areaDepth(receivingArea) * 0.16, 1.45, 2));
+  group.add(createDeskStation(deskSpot.x + areaWidth(officeArea) * 0.08, deskSpot.z, 1.65));
+
+  group.traverse((object) => {
+    object.castShadow = true;
+    object.receiveShadow = true;
+  });
+
+  return group;
+}
+
+function findActivityArea(locations: Location[], keywords: string[], fallbackTypes: LocationType[]) {
+  const byKeyword = locations.find((location) => {
+    const text = `${location.name} ${location.description ?? ''}`.toLowerCase();
+
+    return keywords.some((keyword) => text.includes(keyword));
+  });
+
+  if (byKeyword) {
+    return normalizedBounds(byKeyword);
+  }
+
+  const byType = locations.find((location) => fallbackTypes.includes(location.type));
+
+  return byType ? normalizedBounds(byType) : null;
+}
+
+function pointInArea(area: Pick<ReturnType<typeof normalizedBounds>, 'xMin' | 'xMax' | 'yMin' | 'yMax'>, xRatio: number, yRatio: number) {
+  const insetX = Math.min(areaWidth(area) * 0.18, 5);
+  const insetY = Math.min(areaDepth(area) * 0.18, 5);
+  const xMin = area.xMin + insetX;
+  const xMax = area.xMax - insetX;
+  const yMin = area.yMin + insetY;
+  const yMax = area.yMax - insetY;
+
+  return {
+    x: xMin + (xMax - xMin) * xRatio,
+    z: yMin + (yMax - yMin) * yRatio
+  };
+}
+
+function areaWidth(area: Pick<ReturnType<typeof normalizedBounds>, 'xMin' | 'xMax'>) {
+  return Math.max(area.xMax - area.xMin, 1);
+}
+
+function areaDepth(area: Pick<ReturnType<typeof normalizedBounds>, 'yMin' | 'yMax'>) {
+  return Math.max(area.yMax - area.yMin, 1);
+}
+
+function createWorker(x: number, z: number, height: number, rotationY: number, pose: 'walking' | 'carrying' | 'stacking' | 'standing' | 'sitting') {
+  const group = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: '#f3c27a', roughness: 0.58 });
+  const hardHat = new THREE.MeshStandardMaterial({ color: '#facc15', roughness: 0.5 });
+  const shirt = new THREE.MeshStandardMaterial({ color: '#e5eef6', roughness: 0.62 });
+  const overalls = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.68 });
+  const vest = new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.58 });
+  const shoeMaterial = new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.7 });
+  const hairMaterial = new THREE.MeshStandardMaterial({ color: '#6b3f1f', roughness: 0.72 });
+  const scale = height / 1.8;
+  const baseY = pose === 'sitting' ? 0.48 * scale : 0;
+  const bodyHeight = pose === 'sitting' ? 0.58 * scale : 0.78 * scale;
+  const legHeight = pose === 'sitting' ? 0.42 * scale : 0.72 * scale;
+  const headRadius = 0.18 * scale;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075 * scale, 0.085 * scale, 0.14 * scale, 12), skin);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2 * scale, bodyHeight, 8, 16), shirt);
+  const bib = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.42 * scale, 0.24 * scale), overalls);
+  const vestLeft = new THREE.Mesh(new THREE.BoxGeometry(0.07 * scale, 0.5 * scale, 0.27 * scale), vest);
+  const vestRight = vestLeft.clone();
+  const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 18, 12), skin);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 1.06, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.52), hardHat);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.94, 16, 8, 0, Math.PI * 2, Math.PI * 0.42, Math.PI * 0.45), hairMaterial);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.18, 10, 8), skin);
+
+  body.position.y = baseY + legHeight + bodyHeight * 0.5;
+  bib.position.set(0, body.position.y + 0.03 * scale, -0.04 * scale);
+  vestLeft.position.set(-0.15 * scale, body.position.y + 0.04 * scale, -0.07 * scale);
+  vestRight.position.set(0.15 * scale, body.position.y + 0.04 * scale, -0.07 * scale);
+  neck.position.y = baseY + legHeight + bodyHeight + 0.03 * scale;
+  head.position.y = baseY + legHeight + bodyHeight + headRadius * 1.7;
+  helmet.position.copy(head.position);
+  helmet.position.y += headRadius * 0.08;
+  hair.position.copy(head.position);
+  hair.position.y -= headRadius * 0.08;
+  nose.position.set(0, head.position.y - headRadius * 0.02, -headRadius * 0.9);
+
+  group.add(body, bib, vestLeft, vestRight, neck, head, hair, helmet, nose);
+  addWorkerLimbs(group, skin, overalls, shoeMaterial, scale, pose);
+
+  if (pose === 'carrying') {
+    const box = createCardboardBox(0, baseY + legHeight + bodyHeight * 0.42, -0.44 * scale, 0.52 * scale, 0.42 * scale, 0.46 * scale);
+    group.add(box);
+  }
+
+  if (pose === 'stacking') {
+    const box = createCardboardBox(0.34 * scale, baseY + legHeight + bodyHeight * 0.58, -0.28 * scale, 0.42 * scale, 0.34 * scale, 0.42 * scale);
+    group.add(box);
+  }
+
+  group.position.set(x, 0.08, z);
+  group.rotation.y = rotationY;
+
+  return group;
+}
+
+function addWorkerLimbs(
+  group: THREE.Group,
+  skin: THREE.Material,
+  overalls: THREE.Material,
+  shoeMaterial: THREE.Material,
+  scale: number,
+  pose: 'walking' | 'carrying' | 'stacking' | 'standing' | 'sitting'
+) {
+  const legY = pose === 'sitting' ? 0.58 * scale : 0.38 * scale;
+  const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.055 * scale, 0.065 * scale, 0.72 * scale, 10), overalls);
+  const rightLeg = leftLeg.clone();
+  const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.045 * scale, 0.052 * scale, 0.62 * scale, 10), skin);
+  const rightArm = leftArm.clone();
+  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.065 * scale, 12, 8), skin);
+  const rightHand = leftHand.clone();
+  const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.08 * scale, 0.28 * scale), shoeMaterial);
+  const rightShoe = leftShoe.clone();
+
+  leftLeg.position.set(-0.12 * scale, legY, pose === 'walking' ? 0.12 * scale : 0);
+  rightLeg.position.set(0.12 * scale, legY, pose === 'walking' ? -0.12 * scale : 0);
+  leftShoe.position.set(-0.12 * scale, 0.06 * scale, pose === 'walking' ? 0.26 * scale : 0.06 * scale);
+  rightShoe.position.set(0.12 * scale, 0.06 * scale, pose === 'walking' ? -0.26 * scale : 0.06 * scale);
+  leftArm.position.set(-0.34 * scale, 1.24 * scale, 0);
+  rightArm.position.set(0.34 * scale, 1.24 * scale, 0);
+  leftHand.position.set(-0.36 * scale, 0.94 * scale, 0);
+  rightHand.position.set(0.36 * scale, 0.94 * scale, 0);
+
+  if (pose === 'walking') {
+    leftLeg.rotation.x = -0.35;
+    rightLeg.rotation.x = 0.35;
+    leftArm.rotation.x = 0.45;
+    rightArm.rotation.x = -0.45;
+    leftArm.rotation.z = -0.2;
+    rightArm.rotation.z = 0.2;
+    leftHand.position.set(-0.38 * scale, 0.96 * scale, -0.18 * scale);
+    rightHand.position.set(0.38 * scale, 0.96 * scale, 0.18 * scale);
+  } else if (pose === 'carrying') {
+    leftArm.position.set(-0.26 * scale, 1.15 * scale, -0.22 * scale);
+    rightArm.position.set(0.26 * scale, 1.15 * scale, -0.22 * scale);
+    leftArm.rotation.x = Math.PI / 2.8;
+    rightArm.rotation.x = Math.PI / 2.8;
+    leftHand.position.set(-0.23 * scale, 1.07 * scale, -0.48 * scale);
+    rightHand.position.set(0.23 * scale, 1.07 * scale, -0.48 * scale);
+  } else if (pose === 'stacking') {
+    leftArm.position.set(-0.22 * scale, 1.42 * scale, -0.16 * scale);
+    rightArm.position.set(0.22 * scale, 1.42 * scale, -0.16 * scale);
+    leftArm.rotation.x = Math.PI / 2.9;
+    rightArm.rotation.x = Math.PI / 2.9;
+    leftArm.rotation.z = -0.45;
+    rightArm.rotation.z = 0.45;
+    leftHand.position.set(-0.36 * scale, 1.44 * scale, -0.48 * scale);
+    rightHand.position.set(0.36 * scale, 1.44 * scale, -0.48 * scale);
+  } else if (pose === 'sitting') {
+    leftLeg.rotation.x = Math.PI / 2.3;
+    rightLeg.rotation.x = Math.PI / 2.3;
+    leftArm.rotation.x = Math.PI / 2.7;
+    rightArm.rotation.x = Math.PI / 2.7;
+    leftHand.position.set(-0.24 * scale, 0.96 * scale, -0.4 * scale);
+    rightHand.position.set(0.24 * scale, 0.96 * scale, -0.4 * scale);
+  } else {
+    leftArm.rotation.z = -0.2;
+    rightArm.rotation.z = 0.2;
+  }
+
+  group.add(leftLeg, rightLeg, leftArm, rightArm, leftHand, rightHand, leftShoe, rightShoe);
+}
+
+function createCardboardBox(x: number, y: number, z: number, width: number, height: number, depth: number) {
+  const material = new THREE.MeshStandardMaterial({ color: '#d9902f', roughness: 0.72 });
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: '#9a5b17', transparent: true, opacity: 0.65 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), edgeMaterial);
+  const group = new THREE.Group();
+
+  box.position.set(x, y, z);
+  edges.position.copy(box.position);
+  group.add(box, edges);
+
+  return group;
+}
+
+function createBoxStack(x: number, z: number, scale: number, levels: number) {
+  const group = new THREE.Group();
+  const boxSize = 0.64 * scale;
+
+  for (let level = 0; level < levels; level += 1) {
+    const count = Math.max(1, levels - level);
+    for (let index = 0; index < count; index += 1) {
+      group.add(createCardboardBox((index - (count - 1) / 2) * boxSize, boxSize * (level + 0.5), 0, boxSize, boxSize, boxSize));
+    }
+  }
+
+  group.position.set(x, 0.08, z);
+
+  return group;
+}
+
+function createHandTruck(x: number, z: number, scale: number) {
+  const group = new THREE.Group();
+  const metal = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.56, metalness: 0.2 });
+  const wheel = new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.75 });
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 1.35 * scale, 0.08 * scale), metal);
+  const axle = new THREE.Mesh(new THREE.BoxGeometry(0.82 * scale, 0.08 * scale, 0.08 * scale), metal);
+  const platform = new THREE.Mesh(new THREE.BoxGeometry(0.82 * scale, 0.08 * scale, 0.44 * scale), metal);
+
+  frame.position.set(0, 0.78 * scale, 0);
+  frame.rotation.z = -0.18;
+  axle.position.set(0, 0.18 * scale, 0.08 * scale);
+  platform.position.set(0, 0.16 * scale, -0.22 * scale);
+  group.add(frame, axle, platform);
+  group.add(createCardboardBox(0, 0.54 * scale, -0.15 * scale, 0.78 * scale, 0.56 * scale, 0.55 * scale));
+
+  for (const side of [-1, 1]) {
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * scale, 0.13 * scale, 0.09 * scale, 18), wheel);
+    tire.position.set(side * 0.46 * scale, 0.16 * scale, 0.12 * scale);
+    tire.rotation.z = Math.PI / 2;
+    group.add(tire);
+  }
+
+  group.position.set(x, 0.08, z);
+  group.rotation.y = -0.45;
+
+  return group;
+}
+
+function createForklift(x: number, z: number, scale: number, rotationY: number) {
+  const group = new THREE.Group();
+  const yellow = new THREE.MeshStandardMaterial({ color: '#f6b21a', roughness: 0.56 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#1f2937', roughness: 0.62, metalness: 0.12 });
+  const glass = new THREE.MeshStandardMaterial({ color: '#93c5fd', roughness: 0.25, transparent: true, opacity: 0.58 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.55 * scale, 0.72 * scale, 1.1 * scale), yellow);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.78 * scale, 0.86 * scale, 0.92 * scale), yellow);
+  const window = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.52 * scale, 0.96 * scale), glass);
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 1.5 * scale, 1.05 * scale), dark);
+  const forkLeft = new THREE.Mesh(new THREE.BoxGeometry(1.25 * scale, 0.06 * scale, 0.08 * scale), dark);
+  const forkRight = forkLeft.clone();
+
+  body.position.set(0, 0.42 * scale, 0);
+  cabin.position.set(-0.34 * scale, 1.06 * scale, 0);
+  window.position.set(-0.5 * scale, 1.1 * scale, 0);
+  mast.position.set(0.86 * scale, 0.92 * scale, 0);
+  forkLeft.position.set(1.45 * scale, 0.18 * scale, -0.34 * scale);
+  forkRight.position.set(1.45 * scale, 0.18 * scale, 0.34 * scale);
+  group.add(body, cabin, window, mast, forkLeft, forkRight);
+
+  for (const wheelX of [-0.56, 0.55]) {
+    for (const wheelZ of [-0.5, 0.5]) {
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.22 * scale, 0.16 * scale, 18), dark);
+      tire.position.set(wheelX * scale, 0.16 * scale, wheelZ * scale);
+      tire.rotation.x = Math.PI / 2;
+      group.add(tire);
+    }
+  }
+
+  group.position.set(x, 0.08, z);
+  group.rotation.y = rotationY;
+
+  return group;
+}
+
+function createDeskStation(x: number, z: number, scale: number) {
+  const group = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: '#a16207', roughness: 0.66 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.62 });
+  const screen = new THREE.MeshStandardMaterial({ color: '#60a5fa', roughness: 0.35, emissive: '#1d4ed8', emissiveIntensity: 0.16 });
+  const table = new THREE.Mesh(new THREE.BoxGeometry(1.25 * scale, 0.12 * scale, 0.72 * scale), wood);
+  const monitor = new THREE.Mesh(new THREE.BoxGeometry(0.46 * scale, 0.32 * scale, 0.04 * scale), screen);
+  const chair = new THREE.Mesh(new THREE.BoxGeometry(0.42 * scale, 0.44 * scale, 0.42 * scale), dark);
+
+  table.position.set(0, 0.58 * scale, 0);
+  monitor.position.set(0.1 * scale, 0.86 * scale, -0.24 * scale);
+  chair.position.set(-0.58 * scale, 0.28 * scale, 0.14 * scale);
+  group.add(table, monitor, chair);
+
+  for (const xOffset of [-0.5, 0.5]) {
+    for (const zOffset of [-0.26, 0.26]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.56 * scale, 0.08 * scale), wood);
+      leg.position.set(xOffset * scale, 0.29 * scale, zOffset * scale);
+      group.add(leg);
+    }
+  }
+
+  group.position.set(x, 0.08, z);
+  group.rotation.y = -0.2;
 
   return group;
 }
