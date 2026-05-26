@@ -81,12 +81,12 @@ export default function ThreeMapCanvas({
     controls.minZoom = 0.35;
     controls.maxZoom = 32;
     controls.mouseButtons = {
-      LEFT: THREE.MOUSE.PAN,
+      LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.ROTATE
+      RIGHT: THREE.MOUSE.PAN
     };
     controls.touches = {
-      ONE: THREE.TOUCH.PAN,
+      ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_ROTATE
     };
     controlsRef.current = controls;

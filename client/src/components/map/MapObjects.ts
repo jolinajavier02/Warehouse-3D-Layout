@@ -329,7 +329,6 @@ function createWarehouseActivityLayer(locations: Location[], bounds: ReturnType<
   const leftStorageArea = findActivityArea(locations, ['left storage', 'zone b', 'storage'], ['Rack', 'Shelf', 'Layout Zone']) ?? fallbackArea;
   const rightStorageArea = findActivityArea(locations, ['right storage', 'zone c', 'storage'], ['Rack', 'Shelf', 'Layout Zone']) ?? fallbackArea;
   const aisleArea = findActivityArea(locations, ['main horizontal way', 'main aisle', 'way', 'aisle'], ['Path', 'Main Aisle']) ?? fallbackArea;
-  const officeArea = findActivityArea(locations, ['office', 'open zone', 'planning'], ['Office', 'Layout Zone']) ?? fallbackArea;
 
   const walkingWorker = pointInArea(aisleArea, 0.22, 0.48);
   const carryingWorker = pointInArea(rightStorageArea, 0.38, 0.32);
@@ -337,10 +336,10 @@ function createWarehouseActivityLayer(locations: Location[], bounds: ReturnType<
   const forkliftSpot = pointInArea(receivingArea, 0.7, 0.55);
   const leftForkliftSpot = pointInArea(leftStorageArea, 0.22, 0.78);
   const rightForkliftSpot = pointInArea(rightStorageArea, 0.72, 0.62);
-  const deskSpot = pointInArea(officeArea, 0.72, 0.42);
+  const deskSpot = pointInArea(receivingArea, 0.27, 0.34);
   const workerHeight = 3.65;
-  const deskOffset = Math.min(areaWidth(officeArea) * 0.04, 1.2);
-  const deskScale = 2.05;
+  const deskOffset = Math.min(areaWidth(receivingArea) * 0.035, 1);
+  const deskScale = 1.72;
 
   group.add(createWorker(walkingWorker.x, walkingWorker.z, workerHeight, 0.55, 'pointing'));
   group.add(createWorker(carryingWorker.x, carryingWorker.z, workerHeight, -0.65, 'carrying'));
